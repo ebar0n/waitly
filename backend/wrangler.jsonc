@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "waitly-api",
+  "compatibility_date": "2026-03-24",
+  "main": "./src/index.ts"
+  // To add D1, uncomment and configure:
+  // "d1_databases": [
+  //   {
+  //     "binding": "DB",
+  //     "database_name": "waitly-db",
+  //     "database_id": "<your-database-id>"
+  //   }
+  // ]
+}
