@@ -6,6 +6,9 @@
     "install:frontend": "npm install --prefix frontend",
     "install:backend": "npm install --prefix backend",
     "install:all": "npm run install:frontend && npm run install:backend",
+    "cf-typegen:frontend": "npm run cf-typegen --prefix frontend",
+    "cf-typegen:backend": "npm run cf-typegen --prefix backend",
+    "cf-typegen": "npm run cf-typegen:frontend && npm run cf-typegen:backend",
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:backend": "npm run dev --prefix backend",
     "dev": "npm run dev:backend & npm run dev:frontend"
