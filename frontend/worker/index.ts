@@ -1,2 +1,6 @@
-// Minimal worker — all routes are served as static assets (SPA)
-export default {}
+// Minimal worker — all routes fall through to static assets (SPA)
+export default {
+  async fetch(): Promise<Response> {
+    return new Response(null, { status: 404 })
+  },
+}
