@@ -35,7 +35,8 @@ waitly/
     │   │   ├── auth.ts             # POST /auth/token
     │   │   └── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
     │   └── services/
-    │       └── waitlist.ts         # Capa de datos (mock → listo para D1)
+    │       ├── waitlist.ts         # Capa de datos (mock → listo para D1)
+    │       └── email.ts            # Envío de email de bienvenida via Resend
     ├── tsconfig.json
     ├── wrangler.jsonc              # name: waitly-api
     └── .dev.vars.example
@@ -105,11 +106,12 @@ npm run dev:backend
 
 ### Backend (`backend/.dev.vars`)
 
-| Variable       | Descripción                                         | Ejemplo local           |
-|----------------|-----------------------------------------------------|-------------------------|
-| `CORS_ORIGIN`  | Origen permitido para CORS                          | `*`                     |
-| `JWT_SECRET`   | Clave para firmar y verificar JWTs                  | `dev-jwt-secret`        |
-| `ADMIN_SECRET` | Clave para obtener tokens desde `/auth/token`       | `dev-admin-secret`      |
+| Variable         | Descripción                                         | Ejemplo local           |
+|------------------|-----------------------------------------------------|-------------------------|
+| `CORS_ORIGIN`    | Origen permitido para CORS                          | `*`                     |
+| `JWT_SECRET`     | Clave para firmar y verificar JWTs                  | `dev-jwt-secret`        |
+| `ADMIN_SECRET`   | Clave para obtener tokens desde `/auth/token`       | `dev-admin-secret`      |
+| `RESEND_API_KEY` | API key de Resend (dev local — en prod usa Secrets Store) | `re_...`          |
 
 ### Frontend (`frontend/.dev.vars`)
 
@@ -123,7 +125,7 @@ npm run dev:backend
 
 ### 1. Configurar secrets en producción (primera vez)
 
-Antes del primer deploy, configura los secrets en Cloudflare:
+Antes del primer deploy, configura los secrets por Worker:
 
 ```bash
 cd backend
@@ -138,7 +140,17 @@ npx wrangler secret put ADMIN_SECRET
 # Introduce: un valor seguro generado con openssl rand -base64 32
 ```
 
-> Los secrets se guardan cifrados en Cloudflare y persisten entre deploys.
+`RESEND_API_KEY` se gestiona en el **Cloudflare Secrets Store** (compartido entre Workers) y ya está configurado. Para actualizarlo:
+
+```bash
+# Listar stores disponibles
+npx wrangler secrets-store store list --remote
+
+# Actualizar el secreto en el store
+npx wrangler secrets-store secret put <STORE_ID> RESEND_API_KEY --remote
+```
+
+> Los secrets de Worker se guardan cifrados y persisten entre deploys.
 > `wrangler deploy` falla si alguno de los secrets requeridos no está configurado.
 
 ### 2. Deploy del backend

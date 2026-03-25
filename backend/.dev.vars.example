@@ -7,3 +7,7 @@ CORS_ORIGIN=*
 # Secrets requeridos (declarados en wrangler.jsonc > secrets.required)
 JWT_SECRET=your-dev-jwt-secret
 ADMIN_SECRET=your-dev-admin-secret
+
+# Secrets Store — en producción se lee del Cloudflare Secrets Store (wrangler.jsonc > secrets_store_secrets)
+# En desarrollo local wrangler usa este valor como fallback
+RESEND_API_KEY=re_your_resend_api_key
