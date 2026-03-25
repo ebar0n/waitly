@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { jwtAuth, requireScope } from '../middleware/auth'
 import { WaitlistService } from '../services/waitlist'
+import { EmailService } from '../services/email'
 
 // --- Schemas ---
 
@@ -54,6 +55,11 @@ publicWaitlistRouter.openapi(postRoute, async (c) => {
   const country = c.req.header('CF-IPCountry') ?? null
 
   const result = await WaitlistService.addEmail(email, country)
+
+  c.executionCtx.waitUntil(
+    EmailService.sendWelcome(email, c.env.RESEND_API_KEY),
+  )
+
   return c.json(result, 201)
 })
 
