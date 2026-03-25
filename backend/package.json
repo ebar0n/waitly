@@ -7,14 +7,23 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write src"
   },
   "dependencies": {
-    "hono": "^4.7.0"
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.2.3",
+    "hono": "^4.7.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.1",
+    "@cloudflare/vitest-pool-workers": "^0.13.4",
+    "@types/node": "^25.5.0",
+    "prettier": "^3.8.1",
     "typescript": "~5.9.3",
+    "vitest": "^4.1.1",
     "wrangler": "^4.77.0"
   }
 }

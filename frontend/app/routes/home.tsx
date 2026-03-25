@@ -1,11 +1,23 @@
 import { useState } from 'react'
-import styles from './App.module.css'
-
-type Status = 'idle' | 'loading' | 'success' | 'error'
+import { Link } from 'react-router'
+import type { Route } from './+types/home'
+import styles from '../../src/App.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8787'
 
-export default function App() {
+export function meta(_: Route.MetaArgs) {
+  return [
+    { title: 'Waitly — Cloudflare Workers con Platzi' },
+    {
+      name: 'description',
+      content: 'Aprende a construir aplicaciones serverless de producción con Cloudflare Workers.',
+    },
+  ]
+}
+
+type Status = 'idle' | 'loading' | 'success' | 'error'
+
+export default function Home() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState('')
@@ -89,6 +101,18 @@ export default function App() {
         </form>
 
         <p className={styles.tagline}>Sin spam. Solo lo importante.</p>
+
+        <Link
+          to="/stats"
+          style={{
+            alignSelf: 'center',
+            fontSize: '0.8rem',
+            color: 'var(--muted)',
+            textDecoration: 'none',
+          }}
+        >
+          Stats via Server Render →
+        </Link>
       </div>
     </main>
   )

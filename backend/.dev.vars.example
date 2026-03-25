@@ -1,0 +1,9 @@
+# Copia este archivo como .dev.vars y completa los valores para desarrollo local
+# En producción usa: wrangler secret put JWT_SECRET
+
+# Sobreescribe el CORS_ORIGIN de wrangler.jsonc para desarrollo local
+CORS_ORIGIN=*
+
+# Secrets requeridos (declarados en wrangler.jsonc > secrets.required)
+JWT_SECRET=your-dev-jwt-secret
+ADMIN_SECRET=your-dev-admin-secret
