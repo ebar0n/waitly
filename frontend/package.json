@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "react-router typegen && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "cf-typegen": "wrangler types",
+    "cf-typegen": "react-router typegen && wrangler types",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write 'app/**/*.{ts,tsx}' 'src/**/*.{ts,tsx}'"

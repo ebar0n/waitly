@@ -1,15 +1,5 @@
 import { createRequestHandler } from 'react-router'
 
-declare module 'react-router' {
-  interface AppLoadContext {
-    cloudflare: {
-      env: Env
-      ctx: ExecutionContext
-      cf: Request['cf']
-    }
-  }
-}
-
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
   import.meta.env.MODE

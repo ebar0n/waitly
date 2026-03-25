@@ -4,16 +4,26 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: 'Stats — Waitly' }]
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+type GeoData = {
+  country: string | null
+  city: string | null
+  region: string | null
+  timezone: string | null
+  continent: string | null
+  colo: string | null
+  cfIpCountry: string | null
+}
+
+export async function loader({ request, context }: Route.LoaderArgs): Promise<GeoData> {
   const cf = context.cloudflare.cf
 
   return {
-    country: cf?.country ?? null,
-    city: cf?.city ?? null,
-    region: cf?.region ?? null,
-    timezone: cf?.timezone ?? null,
-    continent: cf?.continent ?? null,
-    colo: cf?.colo ?? null,
+    country: (cf?.country as string | undefined) ?? null,
+    city: (cf?.city as string | undefined) ?? null,
+    region: (cf?.region as string | undefined) ?? null,
+    timezone: (cf?.timezone as string | undefined) ?? null,
+    continent: (cf?.continent as string | undefined) ?? null,
+    colo: (cf?.colo as string | undefined) ?? null,
     // Solo disponible en producción — el proxy de Cloudflare lo inyecta
     cfIpCountry: request.headers.get('CF-IPCountry'),
   }
@@ -84,7 +94,7 @@ export default function Stats({ loaderData }: Route.ComponentProps) {
             { label: 'Continente', value: continent },
             { label: 'Timezone', value: timezone },
             { label: 'Datacenter CF', value: colo },
-          ].map(({ label, value, note }, i, arr) => (
+          ].map(({ label, value, note }: { label: string; value: string | null; note?: string }, i, arr) => (
             <div
               key={label}
               style={{
