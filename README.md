@@ -16,7 +16,8 @@ waitly/
 │   ├── app/
 │   │   ├── routes/
 │   │   │   ├── home.tsx            # Página de waitlist (SPA con hidratación)
-│   │   │   └── stats.tsx           # Datos de geolocalización (SSR puro)
+│   │   │   ├── stats.tsx           # Datos de geolocalización (SSR puro)
+│   │   │   └── landing.tsx         # Landing A/B testing con KV (SSR)
 │   │   ├── entry.server.tsx        # Render en Worker (renderToReadableStream)
 │   │   └── root.tsx
 │   ├── worker/
@@ -35,7 +36,7 @@ waitly/
     │   │   ├── auth.ts             # POST /auth/token
     │   │   └── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
     │   └── services/
-    │       ├── waitlist.ts         # Capa de datos (mock → listo para D1)
+    │       ├── waitlist.ts         # Capa de datos — D1 (INSERT / SELECT)
     │       └── email.ts            # Envío de email de bienvenida via Resend
     ├── tsconfig.json
     ├── wrangler.jsonc              # name: waitly-api
@@ -196,16 +197,32 @@ curl -X POST http://localhost:8787/auth/token \
 
 ---
 
-## Agregar D1 (base de datos)
+## Bindings de Cloudflare
 
-La capa de persistencia está abstraída en `backend/src/services/waitlist.ts`.
-Para conectar una base de datos D1:
+### D1 — Base de datos (`waitly-db`)
 
-1. Crear la base de datos:
-   ```bash
-   npx wrangler d1 create waitly-db
-   ```
+El backend usa D1 para persistir registros. Las migraciones están en `backend/migrations/`.
 
-2. Descomentar el binding en `backend/wrangler.jsonc` con el ID generado.
+```bash
+# Aplicar migraciones en producción
+cd backend
+npx wrangler d1 migrations apply waitly-db --remote
 
-3. Reemplazar el mock en `waitlist.ts` con las queries reales a `env.DB`.
+# Aplicar migraciones en local
+npx wrangler d1 migrations apply waitly-db --local
+```
+
+### KV — A/B Testing (`AB_CONFIG`)
+
+El frontend usa KV para la landing con experimento A/B. La key `ab:config` almacena la configuración de variantes; `variant:<email>` registra qué variante vio cada usuario.
+
+```bash
+# Sembrar la config en producción
+cd frontend
+npx wrangler kv key put --remote --namespace-id=e19adee3c5904afa84672409a89e573e "ab:config" \
+  '{"variant_a":{"badge":"Acceso Anticipado","headline":"Domina Cloudflare Workers desde cero","cta":"Reservar mi lugar"},"variant_b":{"badge":"Cupos Limitados","headline":"Construye apps serverless de producción hoy","cta":"Quiero aprender ahora"}}'
+
+# Sembrar la config en local
+npx wrangler kv key put --local --namespace-id=e19adee3c5904afa84672409a89e573e "ab:config" \
+  '{"variant_a":{"badge":"Acceso Anticipado","headline":"Domina Cloudflare Workers desde cero","cta":"Reservar mi lugar"},"variant_b":{"badge":"Cupos Limitados","headline":"Construye apps serverless de producción hoy","cta":"Quiero aprender ahora"}}'
+```

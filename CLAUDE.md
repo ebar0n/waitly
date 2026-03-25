@@ -57,8 +57,10 @@ npm run cf-typegen   # react-router typegen + wrangler types
 - Protected router applies `jwtAuth` via `.use('/waitlist/*')` and `.use('/waitlist')` (not `/*` — that would catch `/swagger`)
 
 **Service layer**:
-- `src/services/waitlist.ts` — currently mock data. Swap `addEmail`, `findAll`, `findByEmail` for D1 queries when the database is connected.
+- `src/services/waitlist.ts` — persists data in D1. Methods: `addEmail(db, email, country)`, `findAll(db)`, `findByEmail(db, email)`. Migrations live in `backend/migrations/`.
 - `src/services/email.ts` — sends welcome email via Resend after registration. Called inside `c.executionCtx.waitUntil()` in `POST /waitlist` so it doesn't block the response. Hardcoded recipient until a domain is verified in Resend.
+
+**D1 database** (`wrangler.jsonc` → `d1_databases`): binding `DB`, database `waitly-db` (ID: `69ed849a-5347-4dec-abb3-5ccb9e15b886`). Run migrations with `wrangler d1 migrations apply waitly-db --remote`. Local dev uses a local SQLite file automatically.
 
 **Secrets** (declared in `wrangler.jsonc` as `secrets.required`): `CORS_ORIGIN`, `JWT_SECRET`, `ADMIN_SECRET`. Local values come from `.dev.vars`. In production, set with `wrangler secret put`.
 
@@ -73,8 +75,11 @@ npm run cf-typegen   # react-router typegen + wrangler types
 **SSR worker** (`worker/app.ts`): receives `Request`, passes `{ env, ctx, cf: request.cf }` as `context.cloudflare` to React Router loaders.
 
 **Routes** (`app/routes.ts`):
-- `routes/home.tsx` — waitlist signup form, client-side fetch to backend, SSR with hydration
+- `routes/home.tsx` — waitlist signup form, client-side fetch to backend (`VITE_API_URL`), SSR with hydration
 - `routes/stats.tsx` — reads `context.cloudflare.cf` in the loader for geolocation data (SSR only, no client state)
+- `routes/landing.tsx` — SSR A/B testing landing. `loader` reads `ab:config` from KV (`AB_CONFIG` binding, `cacheTtl: 60`), assigns variant via cookie (`ab_variant`). `action` saves `variant:<email>` to KV and proxies registration to backend via `VITE_API_URL`.
+
+**KV namespace** (`wrangler.jsonc` → `kv_namespaces`): binding `AB_CONFIG` (ID: `e19adee3c5904afa84672409a89e573e`). Stores `ab:config` (A/B variant config JSON) and `variant:<email>` (which variant each user saw).
 
 **`AppLoadContext`** is augmented in `app/env.d.ts` (included in `tsconfig.app.json`) so loaders see `context.cloudflare` typed. `worker-configuration.d.ts` is also included in `tsconfig.app.json` to provide `Env` and `ExecutionContext`.
 
