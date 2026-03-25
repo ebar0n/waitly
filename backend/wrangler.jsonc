@@ -23,13 +23,13 @@
       "store_id": "59210c5f4b6c4de39491d30070a047e9",
       "secret_name": "RESEND_API_KEY"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "waitly-db",
+      "database_id": "69ed849a-5347-4dec-abb3-5ccb9e15b886",
+      "migrations_dir": "./migrations"
+    }
   ]
-  // To add D1, uncomment and configure:
-  // "d1_databases": [
-  //   {
-  //     "binding": "DB",
-  //     "database_name": "waitly-db",
-  //     "database_id": "<your-database-id>"
-  //   }
-  // ]
 }

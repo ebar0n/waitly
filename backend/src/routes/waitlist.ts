@@ -47,6 +47,10 @@ const postRoute = createRoute({
       content: { 'application/json': { schema: ErrorSchema } },
       description: 'Request inválido',
     },
+    409: {
+      content: { 'application/json': { schema: ErrorSchema } },
+      description: 'Email ya registrado',
+    },
   },
 })
 
@@ -54,10 +58,21 @@ publicWaitlistRouter.openapi(postRoute, async (c) => {
   const { email } = c.req.valid('json')
   const country = c.req.header('CF-IPCountry') ?? null
 
-  const result = await WaitlistService.addEmail(email, country)
+  let result: Awaited<ReturnType<typeof WaitlistService.addEmail>>
+  try {
+    result = await WaitlistService.addEmail(c.env.DB, email, country)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Este email ya está registrado' }, 409 as const)
+    }
+    throw err
+  }
 
   c.executionCtx.waitUntil(
-    EmailService.sendWelcome(email, c.env.RESEND_API_KEY),
+    EmailService.sendWelcome(email, c.env.RESEND_API_KEY).catch((err) =>
+      console.error('Email send failed:', err),
+    ),
   )
 
   return c.json(result, 201)
@@ -135,14 +150,14 @@ const getByEmailRoute = createRoute({
   },
 })
 
-protectedWaitlistRouter.openapi(getListRoute, (c) => {
-  const entries = WaitlistService.findAll()
+protectedWaitlistRouter.openapi(getListRoute, async (c) => {
+  const entries = await WaitlistService.findAll(c.env.DB)
   return c.json({ entries, total: entries.length }, 200 as const)
 })
 
-protectedWaitlistRouter.openapi(getByEmailRoute, (c) => {
+protectedWaitlistRouter.openapi(getByEmailRoute, async (c) => {
   const { email } = c.req.valid('param')
-  const entry = WaitlistService.findByEmail(email)
+  const entry = await WaitlistService.findByEmail(c.env.DB, email)
   if (!entry) return c.json({ error: 'Email no encontrado en la lista' }, 404 as const)
   return c.json(entry, 200 as const)
 })

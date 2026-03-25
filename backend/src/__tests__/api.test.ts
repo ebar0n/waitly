@@ -1,10 +1,38 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env } from 'cloudflare:workers'
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import worker from '../index'
 
 const BASE = 'http://localhost'
+
+async function getToken(): Promise<string> {
+  const ctx = createExecutionContext()
+  const res = await worker.fetch(
+    new Request(`${BASE}/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: 'test-admin', scope: 'read:all' }),
+    }),
+    env,
+    ctx,
+  )
+  await waitOnExecutionContext(ctx)
+  const body = (await res.json()) as { token: string }
+  return body.token
+}
+
+beforeEach(async () => {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS waitlist (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      email     TEXT    NOT NULL UNIQUE,
+      country   TEXT,
+      joined_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    )`,
+  ).run()
+  await env.DB.prepare('DELETE FROM waitlist').run()
+})
 
 describe('GET /health', () => {
   it('returns 200 with status ok', async () => {
@@ -31,8 +59,9 @@ describe('POST /waitlist', () => {
     )
     await waitOnExecutionContext(ctx)
     expect(res.status).toBe(201)
-    const body = (await res.json()) as { success: boolean }
+    const body = (await res.json()) as { success: boolean; entry: { email: string } }
     expect(body.success).toBe(true)
+    expect(body.entry.email).toBe('test@example.com')
   })
 
   it('returns 400 for invalid email', async () => {
@@ -48,6 +77,27 @@ describe('POST /waitlist', () => {
     )
     await waitOnExecutionContext(ctx)
     expect(res.status).toBe(400)
+  })
+
+  it('returns 409 for duplicate email', async () => {
+    const register = () =>
+      worker.fetch(
+        new Request(`${BASE}/waitlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'dup@example.com' }),
+        }),
+        env,
+        createExecutionContext(),
+      )
+
+    const first = await register()
+    await waitOnExecutionContext(createExecutionContext())
+    expect(first.status).toBe(201)
+
+    const second = await register()
+    await waitOnExecutionContext(createExecutionContext())
+    expect(second.status).toBe(409)
   })
 })
 
@@ -91,5 +141,82 @@ describe('GET /waitlist', () => {
     const res = await worker.fetch(new Request(`${BASE}/waitlist`), env, ctx)
     await waitOnExecutionContext(ctx)
     expect(res.status).toBe(401)
+  })
+
+  it('returns 200 with registered entries', async () => {
+    // Register two emails
+    for (const email of ['alice@example.com', 'bob@example.com']) {
+      const ctx = createExecutionContext()
+      await worker.fetch(
+        new Request(`${BASE}/waitlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        }),
+        env,
+        ctx,
+      )
+      await waitOnExecutionContext(ctx)
+    }
+
+    const token = await getToken()
+    const ctx = createExecutionContext()
+    const res = await worker.fetch(
+      new Request(`${BASE}/waitlist`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+      ctx,
+    )
+    await waitOnExecutionContext(ctx)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { total: number; entries: unknown[] }
+    expect(body.total).toBe(2)
+    expect(body.entries).toHaveLength(2)
+  })
+})
+
+describe('GET /waitlist/:email', () => {
+  it('returns 404 for unknown email', async () => {
+    const token = await getToken()
+    const ctx = createExecutionContext()
+    const res = await worker.fetch(
+      new Request(`${BASE}/waitlist/nobody@example.com`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+      ctx,
+    )
+    await waitOnExecutionContext(ctx)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 200 with entry for registered email', async () => {
+    const email = 'found@example.com'
+    const postCtx = createExecutionContext()
+    await worker.fetch(
+      new Request(`${BASE}/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }),
+      env,
+      postCtx,
+    )
+    await waitOnExecutionContext(postCtx)
+
+    const token = await getToken()
+    const ctx = createExecutionContext()
+    const res = await worker.fetch(
+      new Request(`${BASE}/waitlist/${email}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+      ctx,
+    )
+    await waitOnExecutionContext(ctx)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { email: string }
+    expect(body.email).toBe(email)
   })
 })

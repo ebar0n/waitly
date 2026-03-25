@@ -11,6 +11,7 @@ export default defineConfig({
           JWT_SECRET: 'test-secret',
           ADMIN_SECRET: 'test-admin',
         },
+        d1Databases: ['DB'],
       },
     }),
   ],
