@@ -43,6 +43,24 @@ waitly/
 
 ---
 
+## Claude Code — MCP y Skills de Cloudflare
+
+Para obtener acceso a documentación, bindings, observability y builds de Cloudflare directamente desde Claude Code, instala el MCP oficial:
+
+```bash
+claude mcp add --transport http cloudflare https://observability.mcp.cloudflare.com/sse
+```
+
+También puedes instalar los skills de Cloudflare que añaden conocimiento especializado sobre Workers, D1, KV, R2 y más:
+
+```bash
+claude plugin install cloudflare
+```
+
+Documentación completa: https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/
+
+---
+
 ## Requisitos
 
 - [Node.js 22](https://nodejs.org/) (ver `.nvmrc`)
