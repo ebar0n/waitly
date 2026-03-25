@@ -56,9 +56,13 @@ npm run cf-typegen   # react-router typegen + wrangler types
 - `requireScope(scope)` — checks `jwtPayload.scope`; `read:all` satisfies any required scope
 - Protected router applies `jwtAuth` via `.use('/waitlist/*')` and `.use('/waitlist')` (not `/*` — that would catch `/swagger`)
 
-**Service layer** (`src/services/waitlist.ts`): currently mock data. Swap `addEmail`, `findAll`, `findByEmail` for D1 queries when the database is connected.
+**Service layer**:
+- `src/services/waitlist.ts` — currently mock data. Swap `addEmail`, `findAll`, `findByEmail` for D1 queries when the database is connected.
+- `src/services/email.ts` — sends welcome email via Resend after registration. Called inside `c.executionCtx.waitUntil()` in `POST /waitlist` so it doesn't block the response. Hardcoded recipient until a domain is verified in Resend.
 
 **Secrets** (declared in `wrangler.jsonc` as `secrets.required`): `CORS_ORIGIN`, `JWT_SECRET`, `ADMIN_SECRET`. Local values come from `.dev.vars`. In production, set with `wrangler secret put`.
+
+**Secrets Store** (`wrangler.jsonc` → `secrets_store_secrets`): `RESEND_API_KEY` is bound from the `default_secrets_store` (store ID: `59210c5f4b6c4de39491d30070a047e9`). In the Worker, the binding is typed as `SecretsStoreSecret` — call `await env.RESEND_API_KEY.get()` to retrieve the value. For local dev, wrangler falls back to `.dev.vars`.
 
 **Tests** run inside the actual workerd runtime using `@cloudflare/vitest-pool-workers`. Test bindings are injected via `miniflare.bindings` in `vitest.config.ts` — not from `.dev.vars`.
 
