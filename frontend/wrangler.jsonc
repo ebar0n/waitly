@@ -7,6 +7,12 @@
     "not_found_handling": "single-page-application"
   },
   "main": "./worker/app.ts",
+  "kv_namespaces": [
+    {
+      "binding": "AB_CONFIG",
+      "id": "e19adee3c5904afa84672409a89e573e"
+    }
+  ],
   "observability": {
     "enabled": true,
     "logs": {

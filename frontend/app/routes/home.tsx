@@ -113,6 +113,17 @@ export default function Home() {
         >
           Stats via Server Render →
         </Link>
+        <Link
+          to="/landing"
+          style={{
+            alignSelf: 'center',
+            fontSize: '0.8rem',
+            color: 'var(--muted)',
+            textDecoration: 'none',
+          }}
+        >
+          Landing A/B Test (KV) →
+        </Link>
       </div>
     </main>
   )
