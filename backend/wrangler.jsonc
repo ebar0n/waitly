@@ -16,7 +16,14 @@
   },
   "secrets": {
     "required": ["CORS_ORIGIN", "JWT_SECRET", "ADMIN_SECRET"]
-  }
+  },
+  "secrets_store_secrets": [
+    {
+      "binding": "RESEND_API_KEY",
+      "store_id": "59210c5f4b6c4de39491d30070a047e9",
+      "secret_name": "RESEND_API_KEY"
+    }
+  ]
   // To add D1, uncomment and configure:
   // "d1_databases": [
   //   {
