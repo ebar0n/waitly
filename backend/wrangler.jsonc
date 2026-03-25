@@ -1,8 +1,22 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "waitly-api",
-  "compatibility_date": "2026-03-24",
-  "main": "./src/index.ts"
+  "compatibility_date": "2026-02-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/index.ts",
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "secrets": {
+    "required": ["CORS_ORIGIN", "JWT_SECRET", "ADMIN_SECRET"]
+  }
   // To add D1, uncomment and configure:
   // "d1_databases": [
   //   {

@@ -1,13 +1,10 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { reactRouter } from '@react-router/dev/vite'
 import { cloudflare } from '@cloudflare/vite-plugin'
 
-// https://vite.dev/config/
-export default defineConfig(({ command }) => ({
+export default defineConfig({
   plugins: [
-    react(),
-    // El plugin de Cloudflare solo se activa al hacer build
-    // En dev corre Vite puro sin overhead de wrangler
-    command === 'build' ? cloudflare() : null,
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    reactRouter(),
   ],
-}))
+})

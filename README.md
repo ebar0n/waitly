@@ -1,6 +1,6 @@
 # Waitly
 
-Monorepo de la aplicación de lista de espera construida con **Cloudflare Workers**, **Hono** y **React + Vite**.
+Monorepo de la aplicación de lista de espera construida con **Cloudflare Workers**, **Hono** y **React Router v7**.
 
 > Proyecto del curso de **Cloudflare Workers** en Platzi.
 
@@ -10,27 +10,35 @@ Monorepo de la aplicación de lista de espera construida con **Cloudflare Worker
 
 ```
 waitly/
-├── .nvmrc                     # Node.js 22
-├── package.json               # Scripts raíz
-├── frontend/                  # Vite + React + TypeScript
-│   ├── src/
-│   │   ├── App.tsx            # Página de waitlist
-│   │   ├── App.module.css     # Estilos (CSS Modules)
-│   │   ├── main.tsx
-│   │   └── index.css          # Variables CSS globales
+├── .nvmrc                          # Node.js 22
+├── package.json                    # Scripts raíz
+├── frontend/                       # React Router v7 SSR + Cloudflare Workers
+│   ├── app/
+│   │   ├── routes/
+│   │   │   ├── home.tsx            # Página de waitlist (SPA con hidratación)
+│   │   │   └── stats.tsx           # Datos de geolocalización (SSR puro)
+│   │   ├── entry.server.tsx        # Render en Worker (renderToReadableStream)
+│   │   └── root.tsx
 │   ├── worker/
-│   │   └── index.ts           # Worker mínimo (sirve assets como SPA)
-│   ├── index.html
+│   │   └── app.ts                  # Worker SSR — pasa request.cf al loader
+│   ├── react-router.config.ts
 │   ├── vite.config.ts
-│   ├── wrangler.jsonc          # name: waitly-frontend
-│   └── tsconfig.json/app/node/worker
-└── backend/                   # Cloudflare Worker con Hono
+│   ├── wrangler.jsonc              # name: waitly-frontend
+│   ├── .dev.vars.example
+│   └── tsconfig.app/node/worker.json
+└── backend/                        # Cloudflare Worker con Hono + OpenAPI
     ├── src/
-    │   ├── index.ts            # Endpoints: GET /health, POST /waitlist
+    │   ├── index.ts                # App principal + Swagger UI en /swagger
+    │   ├── middleware/
+    │   │   └── auth.ts             # JWT middleware + requireScope
+    │   ├── routes/
+    │   │   ├── auth.ts             # POST /auth/token
+    │   │   └── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
     │   └── services/
-    │       └── waitlist.ts     # Capa de persistencia (mock → listo para D1)
+    │       └── waitlist.ts         # Capa de datos (mock → listo para D1)
     ├── tsconfig.json
-    └── wrangler.jsonc          # name: waitly-api
+    ├── wrangler.jsonc              # name: waitly-api
+    └── .dev.vars.example
 ```
 
 ---
@@ -47,10 +55,15 @@ waitly/
 
 ```bash
 # 1. Activar la versión de Node correcta
-nvm use   # o: fnm use
+nvm use
 
 # 2. Instalar dependencias de ambos proyectos
 npm run install:all
+
+# 3. Configurar variables de entorno locales
+cp backend/.dev.vars.example backend/.dev.vars
+cp frontend/.dev.vars.example frontend/.dev.vars
+# Edita los archivos con tus valores
 ```
 
 ---
@@ -64,77 +77,92 @@ npm run dev
 # Solo frontend  →  http://localhost:5173
 npm run dev:frontend
 
-# Solo backend   →  http://localhost:8787
+# Solo backend   →  http://localhost:8787  (Swagger UI en /)
 npm run dev:backend
 ```
 
-La URL del backend se configura con la variable de entorno `VITE_API_URL`.
-Por defecto apunta a `http://localhost:8787`.
+---
+
+## Variables de entorno
+
+### Backend (`backend/.dev.vars`)
+
+| Variable       | Descripción                                         | Ejemplo local           |
+|----------------|-----------------------------------------------------|-------------------------|
+| `CORS_ORIGIN`  | Origen permitido para CORS                          | `*`                     |
+| `JWT_SECRET`   | Clave para firmar y verificar JWTs                  | `dev-jwt-secret`        |
+| `ADMIN_SECRET` | Clave para obtener tokens desde `/auth/token`       | `dev-admin-secret`      |
+
+### Frontend (`frontend/.dev.vars`)
+
+| Variable       | Descripción                        | Ejemplo local               |
+|----------------|------------------------------------|-----------------------------|
+| `VITE_API_URL` | URL del backend                    | `http://localhost:8787`     |
 
 ---
 
 ## Build y despliegue
 
-### Frontend
+### 1. Configurar secrets en producción (primera vez)
 
-```bash
-cd frontend
-
-# Compilar (TypeScript + Vite)
-npm run build
-
-# Desplegar assets a Cloudflare Workers
-npx wrangler deploy
-```
-
-### Backend
+Antes del primer deploy, configura los secrets en Cloudflare:
 
 ```bash
 cd backend
 
-# Desplegar worker a Cloudflare
+npx wrangler secret put CORS_ORIGIN
+# Introduce: https://waitly-frontend.<tu-subdominio>.workers.dev
+
+npx wrangler secret put JWT_SECRET
+# Introduce: un valor seguro generado con openssl rand -base64 32
+
+npx wrangler secret put ADMIN_SECRET
+# Introduce: un valor seguro generado con openssl rand -base64 32
+```
+
+> Los secrets se guardan cifrados en Cloudflare y persisten entre deploys.
+> `wrangler deploy` falla si alguno de los secrets requeridos no está configurado.
+
+### 2. Deploy del backend
+
+```bash
+cd backend
 npx wrangler deploy
 ```
 
-> Wrangler bundlea el worker automáticamente al hacer `deploy` o `dev`.
-> No hay un paso de build separado para el backend.
+### 3. Deploy del frontend
+
+```bash
+cd frontend
+npm run build
+npx wrangler deploy
+```
 
 ---
 
 ## API
 
-### `GET /health`
+La documentación interactiva está disponible en el Worker desplegado en `/swagger`.
 
-Verifica que el worker está activo.
+### Autenticación
 
-**Respuesta:**
-```json
-{ "status": "ok", "timestamp": "2026-03-24T00:00:00.000Z" }
+```bash
+# Obtener un token con scope read:all
+curl -X POST http://localhost:8787/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{ "secret": "dev-admin-secret", "scope": "read:all" }'
 ```
 
-### `POST /waitlist`
+### Endpoints principales
 
-Agrega un email a la lista de espera.
-
-**Body:**
-```json
-{ "email": "tu@email.com" }
-```
-
-**Respuesta exitosa `201`:**
-```json
-{
-  "success": true,
-  "message": "¡Te agregamos a la lista de espera!",
-  "entry": { "email": "tu@email.com", "joinedAt": "2026-03-24T00:00:00.000Z" }
-}
-```
-
-**Errores `400`:**
-```json
-{ "error": "El campo email es requerido" }
-{ "error": "El formato del email no es válido" }
-```
+| Método | Ruta                  | Auth requerida      | Descripción                        |
+|--------|-----------------------|---------------------|------------------------------------|
+| GET    | `/health`             | No                  | Estado del Worker                  |
+| POST   | `/waitlist`           | No                  | Registrar email en la lista        |
+| GET    | `/waitlist`           | JWT `read:all`      | Listar todos los registros         |
+| GET    | `/waitlist/:email`    | JWT `read:self`     | Consultar un registro por email    |
+| POST   | `/auth/token`         | `ADMIN_SECRET`      | Emitir JWT con scope               |
+| GET    | `/swagger`            | No                  | Documentación OpenAPI              |
 
 ---
 
@@ -148,20 +176,6 @@ Para conectar una base de datos D1:
    npx wrangler d1 create waitly-db
    ```
 
-2. Descomentar el binding en `backend/wrangler.jsonc`:
-   ```jsonc
-   "d1_databases": [
-     {
-       "binding": "DB",
-       "database_name": "waitly-db",
-       "database_id": "<tu-database-id>"
-     }
-   ]
-   ```
+2. Descomentar el binding en `backend/wrangler.jsonc` con el ID generado.
 
-3. Reemplazar el mock en `waitlist.ts` con la query real:
-   ```ts
-   await env.DB.prepare(
-     'INSERT INTO waitlist (email, joined_at) VALUES (?, ?)'
-   ).bind(email, new Date().toISOString()).run()
-   ```
+3. Reemplazar el mock en `waitlist.ts` con las queries reales a `env.DB`.

@@ -1,1 +1,4 @@
+# Copia este archivo como .dev.vars y completa los valores para desarrollo local
+
+# URL del API backend — usa localhost en desarrollo, la URL del Worker en producción en build time
 VITE_API_URL=http://localhost:8787

@@ -11,7 +11,7 @@
     "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
-    "types": ["@cloudflare/workers-types/2023-07-01"]
+    "types": ["@types/node", "@cloudflare/vitest-pool-workers"]
   },
-  "include": ["src"]
+  "include": ["src", "worker-configuration.d.ts"]
 }
