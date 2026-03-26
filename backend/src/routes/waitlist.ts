@@ -19,6 +19,9 @@ const WaitlistResponseSchema = z.object({
   entry: WaitlistEntrySchema,
 })
 
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+
 // --- Rutas públicas ---
 
 export const publicWaitlistRouter = new OpenAPIHono<{ Bindings: Env }>()
@@ -28,12 +31,16 @@ const postRoute = createRoute({
   path: '/waitlist',
   tags: ['Waitlist'],
   summary: 'Unirse a la lista de espera',
-  description: 'Registra un email. Captura el país automáticamente via CF-IPCountry.',
+  description:
+    'Registra un email con foto de perfil opcional. Captura el país automáticamente via CF-IPCountry. Si el email ya existe, actualiza el avatar.',
   request: {
     body: {
       content: {
-        'application/json': {
-          schema: z.object({ email: z.email() }),
+        'multipart/form-data': {
+          schema: z.object({
+            email: z.string().email(),
+            file: z.any().optional(),
+          }),
         },
       },
     },
@@ -43,39 +50,46 @@ const postRoute = createRoute({
       content: { 'application/json': { schema: WaitlistResponseSchema } },
       description: 'Email registrado exitosamente',
     },
+    200: {
+      content: { 'application/json': { schema: WaitlistResponseSchema } },
+      description: 'Perfil actualizado (email ya existía)',
+    },
     400: {
       content: { 'application/json': { schema: ErrorSchema } },
       description: 'Request inválido',
-    },
-    409: {
-      content: { 'application/json': { schema: ErrorSchema } },
-      description: 'Email ya registrado',
     },
   },
 })
 
 publicWaitlistRouter.openapi(postRoute, async (c) => {
-  const { email } = c.req.valid('json')
+  const { email, file } = c.req.valid('form')
   const country = c.req.header('CF-IPCountry') ?? null
 
-  let result: Awaited<ReturnType<typeof WaitlistService.addEmail>>
-  try {
-    result = await WaitlistService.addEmail(c.env.DB, email, country)
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes('UNIQUE constraint failed')) {
-      return c.json({ error: 'Este email ya está registrado' }, 409 as const)
+  const { result, avatarUuid, isNew } = await WaitlistService.upsertEmail(c.env.DB, email, country)
+
+  if (file instanceof File && file.size > 0) {
+    const contentType = file.type
+    if (!ALLOWED_IMAGE_TYPES.includes(contentType)) {
+      return c.json({ error: 'Tipo de archivo no permitido. Solo JPEG, PNG o WebP.' }, 400 as const)
     }
-    throw err
+    if (file.size > MAX_FILE_SIZE) {
+      return c.json({ error: 'El archivo supera el límite de 5MB.' }, 400 as const)
+    }
+    const ext = contentType.split('/')[1]
+    await c.env.UPLOADS_BUCKET.put(`avatars/${avatarUuid}.${ext}`, file.stream(), {
+      httpMetadata: { contentType },
+    })
   }
 
-  c.executionCtx.waitUntil(
-    EmailService.sendWelcome(email, c.env.RESEND_API_KEY).catch((err) =>
-      console.error('Email send failed:', err),
-    ),
-  )
+  if (isNew) {
+    c.executionCtx.waitUntil(
+      EmailService.sendWelcome(email, c.env.RESEND_API_KEY).catch((err) =>
+        console.error('Email send failed:', err),
+      ),
+    )
+  }
 
-  return c.json(result, 201)
+  return c.json(result, isNew ? (201 as const) : (200 as const))
 })
 
 // --- Rutas protegidas (requieren JWT) ---

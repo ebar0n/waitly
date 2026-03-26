@@ -53,12 +53,10 @@ export async function action({ request, context }: Route.ActionArgs) {
   await env.AB_CONFIG.put(`variant:${email}`, variant)
 
   try {
-    const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8787'
-    const res = await fetch(`${apiUrl}/waitlist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
+    const apiUrl = import.meta.env.VITE_API_URL
+    const res = apiUrl
+      ? await fetch(`${apiUrl}/waitlist`, { method: 'POST', body: formData })
+      : await env.BACKEND.fetch(new Request('http://waitly-api/waitlist', { method: 'POST', body: formData }))
     const result = (await res.json()) as { message?: string; error?: string }
     if (!res.ok) {
       return { ok: false, message: result.error ?? 'Algo salió mal.' }
@@ -89,7 +87,7 @@ export default function Landing() {
             {actionData.message}
           </p>
         ) : (
-          <Form method="post" className={styles.form}>
+          <Form method="post" className={styles.form} encType="multipart/form-data">
             <input type="hidden" name="variant" value={variant} />
             <div className={styles.inputGroup}>
               <input
@@ -104,6 +102,12 @@ export default function Landing() {
                 {variantConfig.cta}
               </button>
             </div>
+            <input
+              type="file"
+              name="file"
+              accept="image/jpeg,image/png,image/webp"
+              aria-label="Foto de perfil (opcional)"
+            />
             {actionData?.ok === false && (
               <p className={`${styles.feedback} ${styles.error}`} role="alert">
                 {actionData.message}

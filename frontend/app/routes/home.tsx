@@ -19,6 +19,7 @@ type Status = 'idle' | 'loading' | 'success' | 'error'
 
 export default function Home() {
   const [email, setEmail] = useState('')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState('')
 
@@ -28,10 +29,13 @@ export default function Home() {
     setMessage('')
 
     try {
+      const formData = new FormData()
+      formData.append('email', email)
+      if (avatarFile) formData.append('file', avatarFile)
+
       const res = await fetch(`${API_URL}/waitlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: formData,
       })
 
       const data = (await res.json()) as { message?: string; error?: string }
@@ -43,6 +47,7 @@ export default function Home() {
       setStatus('success')
       setMessage(data.message ?? '¡Ya estás en la lista!')
       setEmail('')
+      setAvatarFile(null)
     } catch (err) {
       setStatus('error')
       setMessage(err instanceof Error ? err.message : 'Algo salió mal. Intenta de nuevo.')
@@ -87,6 +92,14 @@ export default function Home() {
               )}
             </button>
           </div>
+
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={status === 'loading' || status === 'success'}
+            onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+            aria-label="Foto de perfil (opcional)"
+          />
 
           {status === 'success' && (
             <p className={`${styles.feedback} ${styles.success}`} role="status">

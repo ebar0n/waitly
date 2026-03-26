@@ -13,6 +13,9 @@
       "id": "e19adee3c5904afa84672409a89e573e"
     }
   ],
+  "services": [
+    { "binding": "BACKEND", "service": "waitly-api" }
+  ],
   "observability": {
     "enabled": true,
     "logs": {

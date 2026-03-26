@@ -4,16 +4,6 @@
   "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./src/index.ts",
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "head_sampling_rate": 1
-    },
-    "traces": {
-      "enabled": true,
-      "head_sampling_rate": 1
-    }
-  },
   "secrets": {
     "required": ["CORS_ORIGIN", "JWT_SECRET", "ADMIN_SECRET"]
   },
@@ -35,8 +25,7 @@
   "r2_buckets": [
     {
       "binding": "UPLOADS_BUCKET",
-      "bucket_name": "waitly-uploads",
-      "remote": true
+      "bucket_name": "waitly-uploads"
     }
   ]
 }

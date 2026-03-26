@@ -226,3 +226,34 @@ npx wrangler kv key put --remote --namespace-id=e19adee3c5904afa84672409a89e573e
 npx wrangler kv key put --local --namespace-id=e19adee3c5904afa84672409a89e573e "ab:config" \
   '{"variant_a":{"badge":"Acceso Anticipado","headline":"Domina Cloudflare Workers desde cero","cta":"Reservar mi lugar"},"variant_b":{"badge":"Cupos Limitados","headline":"Construye apps serverless de producción hoy","cta":"Quiero aprender ahora"}}'
 ```
+
+### R2 — Avatares (`UPLOADS_BUCKET`)
+
+El backend almacena fotos de perfil en R2. El binding `UPLOADS_BUCKET` usa `remote = true` para conectar al bucket real durante `wrangler dev`.
+
+```bash
+# Crear el bucket (requiere R2 habilitado en el Dashboard de Cloudflare)
+cd backend
+npx wrangler r2 bucket create waitly-uploads
+
+# Aplicar la migración que añade avatar_uuid
+npx wrangler d1 migrations apply waitly-db --remote
+```
+
+- Key en R2: `avatars/<uuid>.<ext>` (sin nombre de archivo, solo extensión)
+- El UUID se genera una vez por email y persiste en D1 (`avatar_uuid`)
+- Re-registrarse con un nuevo avatar sobreescribe el mismo objeto en R2
+- Tipos permitidos: `image/jpeg`, `image/png`, `image/webp` — máximo 5MB
+
+### Service Binding — `BACKEND`
+
+El frontend usa un service binding para llamar al backend Worker-to-Worker en producción (sin latencia de red):
+
+```jsonc
+// frontend/wrangler.jsonc
+"services": [{ "binding": "BACKEND", "service": "waitly-api" }]
+```
+
+Detección de entorno en acciones SSR:
+- `VITE_API_URL` definida (local dev) → `fetch(apiUrl + '/waitlist', { body: formData })`
+- `VITE_API_URL` ausente (producción) → `env.BACKEND.fetch(new Request('http://waitly-api/waitlist', { body: formData }))`
