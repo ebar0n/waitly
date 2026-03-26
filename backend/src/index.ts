@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth'
 import { publicWaitlistRouter, protectedWaitlistRouter } from './routes/waitlist'
 import { commentsRouter } from './routes/comments'
 export { CommentBoard } from './durable-objects/comment-board'
+export { OnboardingWorkflow } from './workflows/onboarding'
 
 const app = new OpenAPIHono<{ Bindings: Env }>()
 

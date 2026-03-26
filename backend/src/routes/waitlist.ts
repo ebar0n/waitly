@@ -2,7 +2,6 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { sign } from 'hono/jwt'
 import { jwtAuth, requireScope } from '../middleware/auth'
 import { WaitlistService } from '../services/waitlist'
-import { EmailService } from '../services/email'
 
 // --- Schemas ---
 
@@ -84,11 +83,7 @@ publicWaitlistRouter.openapi(postRoute, async (c) => {
   }
 
   if (isNew) {
-    c.executionCtx.waitUntil(
-      EmailService.sendWelcome(email, c.env.RESEND_API_KEY).catch((err) =>
-        console.error('Email send failed:', err),
-      ),
-    )
+    await c.env.ONBOARDING_WORKFLOW.create({ id: email, params: { email } })
   }
 
   const commentToken = await sign(

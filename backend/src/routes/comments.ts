@@ -54,6 +54,13 @@ commentsRouter.post('/comments', jwtAuth, requireScope('comment'), async (c) => 
 
   const stub = getStub(c.env, course)
   const comment = await stub.addComment(email, avatarUrl, text.trim())
+
+  c.executionCtx.waitUntil(
+    c.env.DB.prepare('UPDATE waitlist SET last_comment_at = ? WHERE email = ?')
+      .bind(new Date().toISOString(), email)
+      .run(),
+  )
+
   return c.json(comment, 201)
 })
 
