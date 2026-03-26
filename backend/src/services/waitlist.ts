@@ -14,6 +14,7 @@ interface WaitlistRow {
   email: string
   joined_at: string
   country: string | null
+  avatar_uuid: string | null
 }
 
 function rowToEntry(row: WaitlistRow): WaitlistEntry {
@@ -28,7 +29,7 @@ export const WaitlistService = {
       .run()
 
     const row = await db
-      .prepare('SELECT email, country, joined_at FROM waitlist WHERE email = ?')
+      .prepare('SELECT email, country, joined_at, avatar_uuid FROM waitlist WHERE email = ?')
       .bind(email)
       .first<WaitlistRow>()
 
@@ -36,16 +37,57 @@ export const WaitlistService = {
     return { success: true, message: '¡Te agregamos a la lista de espera!', entry }
   },
 
+  async upsertEmail(
+    db: D1Database,
+    email: string,
+    country: string | null,
+  ): Promise<{ result: WaitlistResult; avatarUuid: string; isNew: boolean }> {
+    const existing = await db
+      .prepare('SELECT email, country, joined_at, avatar_uuid FROM waitlist WHERE email = ?')
+      .bind(email)
+      .first<WaitlistRow>()
+
+    if (existing) {
+      let avatarUuid = existing.avatar_uuid
+      if (!avatarUuid) {
+        avatarUuid = crypto.randomUUID()
+        await db.prepare('UPDATE waitlist SET avatar_uuid = ? WHERE email = ?').bind(avatarUuid, email).run()
+      }
+      return {
+        result: { success: true, message: 'Perfil actualizado', entry: rowToEntry(existing) },
+        avatarUuid,
+        isNew: false,
+      }
+    }
+
+    const avatarUuid = crypto.randomUUID()
+    await db
+      .prepare('INSERT INTO waitlist (email, country, avatar_uuid) VALUES (?, ?, ?)')
+      .bind(email, country, avatarUuid)
+      .run()
+
+    const row = await db
+      .prepare('SELECT email, country, joined_at, avatar_uuid FROM waitlist WHERE email = ?')
+      .bind(email)
+      .first<WaitlistRow>()
+
+    return {
+      result: { success: true, message: '¡Te agregamos a la lista de espera!', entry: rowToEntry(row!) },
+      avatarUuid,
+      isNew: true,
+    }
+  },
+
   async findAll(db: D1Database): Promise<WaitlistEntry[]> {
     const { results } = await db
-      .prepare('SELECT email, country, joined_at FROM waitlist ORDER BY joined_at ASC')
+      .prepare('SELECT email, country, joined_at, avatar_uuid FROM waitlist ORDER BY joined_at ASC')
       .all<WaitlistRow>()
     return results.map(rowToEntry)
   },
 
   async findByEmail(db: D1Database, email: string): Promise<WaitlistEntry | undefined> {
     const row = await db
-      .prepare('SELECT email, country, joined_at FROM waitlist WHERE email = ?')
+      .prepare('SELECT email, country, joined_at, avatar_uuid FROM waitlist WHERE email = ?')
       .bind(email)
       .first<WaitlistRow>()
     return row ? rowToEntry(row) : undefined

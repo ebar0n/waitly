@@ -22,13 +22,20 @@ async function getToken(): Promise<string> {
   return body.token
 }
 
+function makeWaitlistForm(email: string): FormData {
+  const fd = new FormData()
+  fd.append('email', email)
+  return fd
+}
+
 beforeEach(async () => {
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS waitlist (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
       email     TEXT    NOT NULL UNIQUE,
       country   TEXT,
-      joined_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      joined_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      avatar_uuid TEXT
     )`,
   ).run()
   await env.DB.prepare('DELETE FROM waitlist').run()
@@ -51,8 +58,7 @@ describe('POST /waitlist', () => {
     const res = await worker.fetch(
       new Request(`${BASE}/waitlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'test@example.com' }),
+        body: makeWaitlistForm('test@example.com'),
       }),
       env,
       ctx,
@@ -66,11 +72,12 @@ describe('POST /waitlist', () => {
 
   it('returns 400 for invalid email', async () => {
     const ctx = createExecutionContext()
+    const fd = new FormData()
+    fd.append('email', 'not-an-email')
     const res = await worker.fetch(
       new Request(`${BASE}/waitlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'not-an-email' }),
+        body: fd,
       }),
       env,
       ctx,
@@ -79,13 +86,12 @@ describe('POST /waitlist', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 409 for duplicate email', async () => {
+  it('returns 200 for duplicate email (upsert)', async () => {
     const register = () =>
       worker.fetch(
         new Request(`${BASE}/waitlist`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'dup@example.com' }),
+          body: makeWaitlistForm('dup@example.com'),
         }),
         env,
         createExecutionContext(),
@@ -97,7 +103,7 @@ describe('POST /waitlist', () => {
 
     const second = await register()
     await waitOnExecutionContext(createExecutionContext())
-    expect(second.status).toBe(409)
+    expect(second.status).toBe(200)
   })
 })
 
@@ -144,14 +150,12 @@ describe('GET /waitlist', () => {
   })
 
   it('returns 200 with registered entries', async () => {
-    // Register two emails
     for (const email of ['alice@example.com', 'bob@example.com']) {
       const ctx = createExecutionContext()
       await worker.fetch(
         new Request(`${BASE}/waitlist`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
+          body: makeWaitlistForm(email),
         }),
         env,
         ctx,
@@ -197,8 +201,7 @@ describe('GET /waitlist/:email', () => {
     await worker.fetch(
       new Request(`${BASE}/waitlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: makeWaitlistForm(email),
       }),
       env,
       postCtx,
