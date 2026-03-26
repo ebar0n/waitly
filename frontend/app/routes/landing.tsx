@@ -64,7 +64,8 @@ export async function action({ request, context }: Route.ActionArgs) {
       return { ok: false, message: result.error ?? 'Algo salió mal.' }
     }
     return { ok: true, message: result.message ?? '¡Ya estás en la lista!' }
-  } catch {
+  } catch (error) {
+    console.error({message: 'No se pudo conectar al servidor.', error})
     return { ok: false, message: 'No se pudo conectar al servidor.' }
   }
 }
