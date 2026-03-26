@@ -53,7 +53,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   await env.AB_CONFIG.put(`variant:${email}`, variant)
 
   try {
-    const apiUrl = import.meta.env.VITE_API_URL
+    const apiUrl = env.VITE_API_URL
     console.info({message: 'Connecting to server...', apiUrl, email})
     const res = apiUrl
       ? await fetch(`${apiUrl}/waitlist`, { method: 'POST', body: formData })
