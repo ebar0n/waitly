@@ -45,15 +45,17 @@ npm run cf-typegen   # react-router typegen + wrangler types
 
 ## Backend architecture
 
-**Entry**: `src/index.ts` — `OpenAPIHono` app, mounts routers, registers CORS, Swagger UI at `/swagger`, OpenAPI doc at `/doc`, redirects `/` → `/swagger`.
+**Entry**: `src/index.ts` — `OpenAPIHono` app, mounts routers, registers CORS, Swagger UI at `/swagger`, OpenAPI doc at `/doc`, redirects `/` → `/swagger`. Also re-exports `CommentBoard` so Wrangler can register the Durable Object class.
 
 **Routers**:
 - `src/routes/auth.ts` — `POST /auth/token`: validates `ADMIN_SECRET`, returns signed JWT (24h, HS256)
-- `src/routes/waitlist.ts` — public router (`POST /waitlist`) + protected router (`GET /waitlist`, `GET /waitlist/{email}`)
+- `src/routes/waitlist.ts` — public router (`POST /waitlist`) + protected router (`GET /waitlist`, `GET /waitlist/{email}`). `POST /waitlist` also signs and returns a `commentToken` (scope `comment`, 30-day exp) so the frontend can post comments without storing extra user data.
+- `src/routes/comments.ts` — comment board router. Public: `GET /comments?course=X` (list) and `GET /comments/ws?course=X` (WebSocket upgrade), both proxied to the DO via `stub.fetch()`. Protected (JWT `comment`): `POST /comments?course=X` (add comment via `stub.addComment()` RPC) and `POST /comments/:id/vote?course=X` (toggle vote via `stub.castVote()` RPC). Course param is validated (`/^[a-z0-9_-]{1,32}$/i`), defaults to `'course-2026'`.
 
 **Auth middleware** (`src/middleware/auth.ts`):
 - `jwtAuth` — wraps `hono/jwt`, catches `HTTPException` so it returns a response instead of throwing
 - `requireScope(scope)` — checks `jwtPayload.scope`; `read:all` satisfies any required scope
+- Scopes: `'read:self'`, `'read:all'`, `'comment'`. Comment tokens carry `{ email, scope: 'comment', exp }`.
 - Protected router applies `jwtAuth` via `.use('/waitlist/*')` and `.use('/waitlist')` (not `/*` — that would catch `/swagger`)
 
 **Service layer**:
@@ -61,6 +63,14 @@ npm run cf-typegen   # react-router typegen + wrangler types
 - `src/services/email.ts` — sends welcome email via Resend after registration. Called inside `c.executionCtx.waitUntil()` in `POST /waitlist` so it doesn't block the response. Hardcoded recipient until a domain is verified in Resend.
 
 **D1 database** (`wrangler.jsonc` → `d1_databases`): binding `DB`, database `waitly-db` (ID: `69ed849a-5347-4dec-abb3-5ccb9e15b886`). Run migrations with `wrangler d1 migrations apply waitly-db --remote`. Local dev uses a local SQLite file automatically. Migration `0002_add_avatar.sql` adds `avatar_uuid TEXT` column — apply manually.
+
+**Durable Object** (`wrangler.jsonc` → `durable_objects` + `migrations`): binding `COMMENT_BOARD`, class `CommentBoard` (`src/durable-objects/comment-board.ts`). Uses `new_sqlite_classes` migration tag `v1`.
+- `idFromName(course)` routes each course slug to its own independent DO instance — changing `?course=X` subscribes to a different board with zero code changes.
+- SQLite schema initialized in constructor: `comments` table (id, email, avatar_url, text, votes, created_at) with indexes on `votes DESC` and `created_at DESC`; `votes` table (comment_id, email, PRIMARY KEY).
+- **RPC methods**: `addComment(email, avatarUrl, text) → Comment` and `castVote(commentId, email) → number`. Both broadcast changes to all connected WebSocket clients via `this.ctx.getWebSockets()`.
+- **`fetch()` handler**: if `Upgrade: websocket` header is present, accepts the WebSocket with Hibernation API (`this.ctx.acceptWebSocket(server)`); otherwise returns the comment list as JSON ordered by `votes DESC, created_at DESC`.
+- **Broadcast messages**: `{ type: 'comment_added', comment }` and `{ type: 'vote_updated', commentId, votes }`.
+- `castVote` is a toggle: if the email already voted on that comment, it removes the vote (-1); otherwise adds it (+1).
 
 **R2 bucket** (`wrangler.jsonc` → `r2_buckets`): binding `UPLOADS_BUCKET`, bucket `waitly-uploads`, `remote = true` so `wrangler dev` writes to the real bucket. Avatar key format: `avatars/<uuid>.<ext>`. Allowed types: `image/jpeg`, `image/png`, `image/webp`. Max size: 5MB. The UUID is generated once per email and persisted in D1 (`avatar_uuid`); re-registration overwrites the same R2 key. Tests use `wrangler.test.jsonc` (no `remote = true`) with `r2Buckets: ['UPLOADS_BUCKET']` in miniflare.
 
@@ -77,7 +87,7 @@ npm run cf-typegen   # react-router typegen + wrangler types
 **SSR worker** (`worker/app.ts`): receives `Request`, passes `{ env, ctx, cf: request.cf }` as `context.cloudflare` to React Router loaders.
 
 **Routes** (`app/routes.ts`):
-- `routes/home.tsx` — waitlist signup form with optional avatar file input; client-side fetch sends `multipart/form-data` to backend via `VITE_API_URL`
+- `routes/home.tsx` — waitlist signup form + comment board. On successful registration, saves `commentToken` from the response to `localStorage` and immediately activates the comment composer (no page reload needed). Comment board: fetches initial list from `GET /comments?course=X`, opens a WebSocket to `ws[s]://.../comments/ws?course=X` for real-time updates, posts via `POST /comments`, votes via `POST /comments/:id/vote`. Course is read from `?course=` query param (defaults to `'course-2026'`) and can be changed live via an editable input — each value resolves to a distinct DO instance via `idFromName`. `VITE_API_URL` drives both the REST calls and the WebSocket URL (`replace(/^http/, 'ws')`).
 - `routes/stats.tsx` — reads `context.cloudflare.cf` in the loader for geolocation data (SSR only, no client state)
 - `routes/landing.tsx` — SSR A/B testing landing. `loader` reads `ab:config` from KV (`AB_CONFIG` binding, `cacheTtl: 60`), assigns variant via cookie (`ab_variant`). `action` saves `variant:<email>` to KV and forwards `multipart/form-data` to backend via service binding (`env.BACKEND`) or direct fetch when `VITE_API_URL` is defined.
 
@@ -105,3 +115,8 @@ npm run cf-typegen   # react-router typegen + wrangler types
 - CF properties on `request.cf` (e.g. `cf?.country`) may be typed as `{}` by workerd types; cast to `string | undefined` when needed
 - `hono/jwt` throws `HTTPException` instead of returning — always wrap in try/catch and return `e.getResponse()`
 - OpenAPIHono response types: middleware-returned status codes (401/403 from `jwtAuth`) must NOT appear in `createRoute` responses for protected routes — TypeScript will error because the handler doesn't return those codes
+- DO RPC stubs: `wrangler types` generates `DurableObjectNamespace` (non-generic). Cast via `as unknown as DurableObjectNamespace<CommentBoard>` to get typed RPC calls.
+- DO SQLite type constraint: `sql.exec<T>` requires `T extends Record<string, SqlStorageValue>`. Use an intersection type (`type Row = Record<string, SqlStorageValue> & { ... specific fields ... }`) to preserve field-level typing while satisfying the constraint.
+- `CommentBoard` must be re-exported from `src/index.ts` (the Worker's `main` entry) for Wrangler to register the DO class. Forgetting this export causes a runtime error at DO instantiation.
+- WebSocket proxy to DO: pass `c.req.raw` directly to `stub.fetch()`. The DO detects the upgrade via the `Upgrade: websocket` header and returns a `101` response with the client WebSocket — the Worker returns it as-is.
+- `commentToken` in `home.tsx` must be `useState` with a setter (not a plain `const`) so that registering for the first time activates the comment composer immediately without a page reload.

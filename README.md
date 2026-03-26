@@ -15,7 +15,7 @@ waitly/
 ├── frontend/                       # React Router v7 SSR + Cloudflare Workers
 │   ├── app/
 │   │   ├── routes/
-│   │   │   ├── home.tsx            # Página de waitlist (SPA con hidratación)
+│   │   │   ├── home.tsx            # Waitlist + tablero de comentarios (cliente)
 │   │   │   ├── stats.tsx           # Datos de geolocalización (SSR puro)
 │   │   │   └── landing.tsx         # Landing A/B testing con KV (SSR)
 │   │   ├── entry.server.tsx        # Render en Worker (renderToReadableStream)
@@ -30,11 +30,14 @@ waitly/
 └── backend/                        # Cloudflare Worker con Hono + OpenAPI
     ├── src/
     │   ├── index.ts                # App principal + Swagger UI en /swagger
+    │   ├── durable-objects/
+    │   │   └── comment-board.ts    # DO CommentBoard — SQLite, RPC, Hibernation WS
     │   ├── middleware/
     │   │   └── auth.ts             # JWT middleware + requireScope
     │   ├── routes/
     │   │   ├── auth.ts             # POST /auth/token
-    │   │   └── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
+    │   │   ├── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
+    │   │   └── comments.ts         # GET|POST /comments, POST /comments/:id/vote, WS
     │   └── services/
     │       ├── waitlist.ts         # Capa de datos — D1 (INSERT / SELECT)
     │       └── email.ts            # Envío de email de bienvenida via Resend
@@ -186,14 +189,18 @@ curl -X POST http://localhost:8787/auth/token \
 
 ### Endpoints principales
 
-| Método | Ruta                  | Auth requerida      | Descripción                        |
-|--------|-----------------------|---------------------|------------------------------------|
-| GET    | `/health`             | No                  | Estado del Worker                  |
-| POST   | `/waitlist`           | No                  | Registrar email en la lista        |
-| GET    | `/waitlist`           | JWT `read:all`      | Listar todos los registros         |
-| GET    | `/waitlist/:email`    | JWT `read:self`     | Consultar un registro por email    |
-| POST   | `/auth/token`         | `ADMIN_SECRET`      | Emitir JWT con scope               |
-| GET    | `/swagger`            | No                  | Documentación OpenAPI              |
+| Método | Ruta                          | Auth requerida      | Descripción                                              |
+|--------|-------------------------------|---------------------|----------------------------------------------------------|
+| GET    | `/health`                     | No                  | Estado del Worker                                        |
+| POST   | `/waitlist`                   | No                  | Registrar email; devuelve `commentToken` en la respuesta |
+| GET    | `/waitlist`                   | JWT `read:all`      | Listar todos los registros                               |
+| GET    | `/waitlist/:email`            | JWT `read:self`     | Consultar un registro por email                          |
+| POST   | `/auth/token`                 | `ADMIN_SECRET`      | Emitir JWT con scope                                     |
+| GET    | `/swagger`                    | No                  | Documentación OpenAPI                                    |
+| GET    | `/comments?course=X`          | No                  | Listar comentarios del curso X                           |
+| POST   | `/comments?course=X`          | JWT `comment`       | Publicar comentario en el curso X                        |
+| POST   | `/comments/:id/vote?course=X` | JWT `comment`       | Toggle +1 en el comentario `:id` del curso X             |
+| GET    | `/comments/ws?course=X`       | No                  | WebSocket — actualizaciones en tiempo real del curso X   |
 
 ---
 
@@ -244,6 +251,26 @@ npx wrangler d1 migrations apply waitly-db --remote
 - El UUID se genera una vez por email y persiste en D1 (`avatar_uuid`)
 - Re-registrarse con un nuevo avatar sobreescribe el mismo objeto en R2
 - Tipos permitidos: `image/jpeg`, `image/png`, `image/webp` — máximo 5MB
+
+### Durable Objects — Tablero de comentarios (`COMMENT_BOARD`)
+
+El backend usa un Durable Object por cada valor de `?course=X`. Cada instancia mantiene su propio SQLite con los comentarios y votos del curso, y gestiona todas las conexiones WebSocket en tiempo real.
+
+```bash
+# El binding y la migración se declaran en backend/wrangler.jsonc
+# No requiere creación manual — Wrangler crea las instancias bajo demanda
+```
+
+**Cómo funciona el multi-tenancy**:
+
+```
+?course=course-2026  →  idFromName('course-2026')  →  DO instancia A  (su propio SQLite)
+?course=bootcamp-q1  →  idFromName('bootcamp-q1')  →  DO instancia B  (su propio SQLite)
+```
+
+Cambiar el parámetro `?course=` en la URL es suficiente para suscribirse a un tablero completamente distinto — sin tocar código.
+
+**JWT `comment`**: al registrarse en `POST /waitlist`, la respuesta incluye `commentToken` con `{ email, scope: 'comment', exp: +30 días }`. El frontend lo guarda en `localStorage` y lo usa en las peticiones protegidas. El backend extrae el `email` del token para asociar el comentario al usuario sin que el cliente envíe datos extra.
 
 ### Service Binding — `BACKEND`
 
