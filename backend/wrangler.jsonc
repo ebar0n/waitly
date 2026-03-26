@@ -38,5 +38,19 @@
       "bucket_name": "waitly-uploads",
       "remote": true
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COMMENT_BOARD",
+        "class_name": "CommentBoard"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CommentBoard"]
+    }
   ]
 }

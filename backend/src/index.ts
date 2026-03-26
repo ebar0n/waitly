@@ -3,6 +3,8 @@ import { swaggerUI } from '@hono/swagger-ui'
 import { cors } from 'hono/cors'
 import { authRouter } from './routes/auth'
 import { publicWaitlistRouter, protectedWaitlistRouter } from './routes/waitlist'
+import { commentsRouter } from './routes/comments'
+export { CommentBoard } from './durable-objects/comment-board'
 
 const app = new OpenAPIHono<{ Bindings: Env }>()
 
@@ -20,6 +22,7 @@ app.use(
 app.route('/', authRouter)
 app.route('/', publicWaitlistRouter)
 app.route('/', protectedWaitlistRouter)
+app.route('/', commentsRouter)
 
 // --- Health check ---
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
