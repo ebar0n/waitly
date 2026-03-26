@@ -57,7 +57,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     console.info({message: 'Connecting to server...', apiUrl, email})
     const res = apiUrl
       ? await fetch(`${apiUrl}/waitlist`, { method: 'POST', body: formData })
-      : await env.BACKEND.fetch(new Request('http://waitly-api/waitlist', { method: 'POST', body: formData }))
+      : await env.BACKEND.fetch(new Request('https://waitly-api.workers.dev/waitlist', { method: 'POST', body: formData }))
     const result = (await res.json()) as { message?: string; error?: string }
     if (!res.ok) {
       return { ok: false, message: result.error ?? 'Algo salió mal.' }
