@@ -83,7 +83,7 @@ publicWaitlistRouter.openapi(postRoute, async (c) => {
   }
 
   if (isNew) {
-    await c.env.ONBOARDING_WORKFLOW.create({ id: email, params: { email } })
+    await c.env.ONBOARDING_WORKFLOW.create({ id: crypto.randomUUID(), params: { email } })
   }
 
   const commentToken = await sign(
