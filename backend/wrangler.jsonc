@@ -15,7 +15,7 @@
     }
   },
   "secrets": {
-    "required": ["CORS_ORIGIN", "JWT_SECRET", "ADMIN_SECRET"]
+    "required": ["CORS_ORIGIN", "JWT_SECRET", "ADMIN_SECRET", "TURNSTILE_SECRET_KEY"]
   },
   "secrets_store_secrets": [
     {
@@ -58,6 +58,18 @@
       "name": "onboarding-workflow",
       "binding": "ONBOARDING_WORKFLOW",
       "class_name": "OnboardingWorkflow"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "IP_RATE_LIMITER",
+      "namespace_id": "1",
+      "simple": { "limit": 20, "period": 60 }
+    },
+    {
+      "name": "COMMENT_RATE_LIMITER",
+      "namespace_id": "2",
+      "simple": { "limit": 3, "period": 60 }
     }
   ]
 }

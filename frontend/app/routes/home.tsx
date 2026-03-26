@@ -4,6 +4,7 @@ import type { Route } from './+types/home'
 import styles from '../../src/App.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8787'
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
 const MAX_CHARS = 280
 
 export function meta(_: Route.MetaArgs) {
@@ -80,6 +81,11 @@ export default function Home() {
   const wsRef = useRef<WebSocket | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
+  // Turnstile
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null)
+  const turnstileWidgetId = useRef<string | null>(null)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setStatus('loading')
@@ -89,6 +95,7 @@ export default function Home() {
       const formData = new FormData()
       formData.append('email', email)
       if (avatarFile) formData.append('file', avatarFile)
+      if (turnstileToken) formData.append('cf-turnstile-response', turnstileToken)
 
       const res = await fetch(`${API_URL}/waitlist`, {
         method: 'POST',
@@ -117,6 +124,11 @@ export default function Home() {
     } catch (err) {
       setStatus('error')
       setMessage(err instanceof Error ? err.message : 'Algo salió mal. Intenta de nuevo.')
+      // Resetear el widget para que el usuario pueda reintentar
+      if (turnstileWidgetId.current && window.turnstile) {
+        window.turnstile.reset(turnstileWidgetId.current)
+        setTurnstileToken(null)
+      }
     }
   }
 
@@ -158,6 +170,45 @@ export default function Home() {
       ws.close()
     }
   }, [course])
+
+  // Cargar y renderizar el widget de Turnstile
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return
+
+    const renderWidget = () => {
+      if (!turnstileContainerRef.current || turnstileWidgetId.current) return
+      turnstileWidgetId.current = window.turnstile!.render(turnstileContainerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: 'dark',
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(null),
+        'error-callback': () => setTurnstileToken(null),
+      })
+    }
+
+    if (window.turnstile) {
+      renderWidget()
+    } else {
+      const existing = document.getElementById('cf-turnstile-script')
+      if (!existing) {
+        const script = document.createElement('script')
+        script.id = 'cf-turnstile-script'
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+        script.async = true
+        script.onload = renderWidget
+        document.head.appendChild(script)
+      } else {
+        existing.addEventListener('load', renderWidget, { once: true })
+      }
+    }
+
+    return () => {
+      if (turnstileWidgetId.current && window.turnstile) {
+        window.turnstile.remove(turnstileWidgetId.current)
+        turnstileWidgetId.current = null
+      }
+    }
+  }, [])
 
   const handleCourseChange = () => {
     const trimmed = courseInput.trim()
@@ -264,7 +315,11 @@ export default function Home() {
             <button
               type="submit"
               className={styles.button}
-              disabled={status === 'loading' || status === 'success'}
+              disabled={
+                status === 'loading' ||
+                status === 'success' ||
+                (!!TURNSTILE_SITE_KEY && !turnstileToken)
+              }
             >
               {status === 'loading' ? (
                 <span className={styles.spinner} aria-hidden="true" />
@@ -283,6 +338,10 @@ export default function Home() {
             onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
             aria-label="Foto de perfil (opcional)"
           />
+
+          {TURNSTILE_SITE_KEY && status !== 'success' && (
+            <div ref={turnstileContainerRef} style={{ alignSelf: 'center' }} />
+          )}
 
           {status === 'success' && (
             <p className={`${styles.feedback} ${styles.success}`} role="status">
@@ -323,10 +382,7 @@ export default function Home() {
       </div>
 
       {/* ── Comments board ── */}
-      <div
-        className={styles.card}
-        style={{ maxWidth: '560px', textAlign: 'left', gap: '1rem' }}
-      >
+      <div className={styles.card} style={{ maxWidth: '560px', textAlign: 'left', gap: '1rem' }}>
         {/* Header */}
         <div
           style={{
@@ -355,7 +411,10 @@ export default function Home() {
         </div>
 
         {/* Course selector */}
-        <div className={styles.inputGroup} style={{ background: 'transparent', marginBottom: '0.25rem' }}>
+        <div
+          className={styles.inputGroup}
+          style={{ background: 'transparent', marginBottom: '0.25rem' }}
+        >
           <input
             className={styles.input}
             value={courseInput}
@@ -377,7 +436,10 @@ export default function Home() {
 
         {/* Comment composer — visible only if registered */}
         {commentToken ? (
-          <form onSubmit={handlePostComment} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <form
+            onSubmit={handlePostComment}
+            style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+          >
             <div
               style={{
                 background: 'var(--surface)',
@@ -484,9 +546,7 @@ export default function Home() {
           >
             <span style={{ fontSize: '1.1rem' }}>💬</span>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)', lineHeight: 1.4 }}>
-              <strong style={{ color: 'var(--text)', fontWeight: 600 }}>
-                Regístrate arriba
-              </strong>{' '}
+              <strong style={{ color: 'var(--text)', fontWeight: 600 }}>Regístrate arriba</strong>{' '}
               para dejar comentarios y votar.
             </p>
           </div>

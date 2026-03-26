@@ -94,33 +94,41 @@ export default function Stats({ loaderData }: Route.ComponentProps) {
             { label: 'Continente', value: continent },
             { label: 'Timezone', value: timezone },
             { label: 'Datacenter CF', value: colo },
-          ].map(({ label, value, note }: { label: string; value: string | null; note?: string }, i, arr) => (
-            <div
-              key={label}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '0.75rem 1.25rem',
-                borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
-              }}
-            >
-              <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{label}</span>
-              <span style={{ textAlign: 'right' }}>
-                <span
-                  style={{
-                    color: value ? 'var(--text)' : 'var(--muted)',
-                    fontSize: '0.9rem',
-                    fontWeight: 500,
-                    display: 'block',
-                  }}
-                >
-                  {value ?? '—'}
+          ].map(
+            (
+              { label, value, note }: { label: string; value: string | null; note?: string },
+              i,
+              arr,
+            ) => (
+              <div
+                key={label}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 1.25rem',
+                  borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                }}
+              >
+                <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{label}</span>
+                <span style={{ textAlign: 'right' }}>
+                  <span
+                    style={{
+                      color: value ? 'var(--text)' : 'var(--muted)',
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
+                      display: 'block',
+                    }}
+                  >
+                    {value ?? '—'}
+                  </span>
+                  {note && (
+                    <span style={{ color: 'var(--muted)', fontSize: '0.72rem' }}>{note}</span>
+                  )}
                 </span>
-                {note && <span style={{ color: 'var(--muted)', fontSize: '0.72rem' }}>{note}</span>}
-              </span>
-            </div>
-          ))}
+              </div>
+            ),
+          )}
         </div>
 
         <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--muted)' }}>

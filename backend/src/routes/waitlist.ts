@@ -23,6 +23,16 @@ const WaitlistResponseSchema = z.object({
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
+async function verifyTurnstile(token: string, secretKey: string, ip: string): Promise<boolean> {
+  const body = new URLSearchParams({ secret: secretKey, response: token, remoteip: ip })
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    body,
+  })
+  const data = await res.json<{ success: boolean }>()
+  return data.success
+}
+
 // --- Rutas públicas ---
 
 export const publicWaitlistRouter = new OpenAPIHono<{ Bindings: Env }>()
@@ -41,6 +51,7 @@ const postRoute = createRoute({
           schema: z.object({
             email: z.string().email(),
             file: z.any().optional(),
+            'cf-turnstile-response': z.string().optional(),
           }),
         },
       },
@@ -63,8 +74,22 @@ const postRoute = createRoute({
 })
 
 publicWaitlistRouter.openapi(postRoute, async (c) => {
-  const { email, file } = c.req.valid('form')
+  const form = c.req.valid('form')
+  const { email, file } = form
+  const turnstileToken = form['cf-turnstile-response']
   const country = c.req.header('CF-IPCountry') ?? null
+
+  // Verificar Turnstile si TURNSTILE_SECRET_KEY está configurada
+  if (c.env.TURNSTILE_SECRET_KEY) {
+    if (!turnstileToken) {
+      return c.json({ error: 'Verificación de seguridad requerida' }, 400 as const)
+    }
+    const ip = c.req.header('CF-Connecting-IP') ?? ''
+    const valid = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET_KEY, ip)
+    if (!valid) {
+      return c.json({ error: 'Verificación de seguridad fallida. Intenta de nuevo.' }, 400 as const)
+    }
+  }
 
   const { result, avatarUuid, isNew } = await WaitlistService.upsertEmail(c.env.DB, email, country)
 

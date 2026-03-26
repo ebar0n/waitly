@@ -11,3 +11,8 @@ ADMIN_SECRET=your-dev-admin-secret
 # Secrets Store — en producción se lee del Cloudflare Secrets Store (wrangler.jsonc > secrets_store_secrets)
 # En desarrollo local wrangler usa este valor como fallback
 RESEND_API_KEY=re_your_resend_api_key
+
+# Cloudflare Turnstile — clave secreta para verificar tokens en el backend
+# Claves de prueba (Cloudflare): siempre válidas en dev
+# Docs: https://developers.cloudflare.com/turnstile/reference/testing/
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

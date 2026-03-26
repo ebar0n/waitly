@@ -51,7 +51,10 @@ export const WaitlistService = {
       let avatarUuid = existing.avatar_uuid
       if (!avatarUuid) {
         avatarUuid = crypto.randomUUID()
-        await db.prepare('UPDATE waitlist SET avatar_uuid = ? WHERE email = ?').bind(avatarUuid, email).run()
+        await db
+          .prepare('UPDATE waitlist SET avatar_uuid = ? WHERE email = ?')
+          .bind(avatarUuid, email)
+          .run()
       }
       return {
         result: { success: true, message: 'Perfil actualizado', entry: rowToEntry(existing) },
@@ -72,7 +75,11 @@ export const WaitlistService = {
       .first<WaitlistRow>()
 
     return {
-      result: { success: true, message: '¡Te agregamos a la lista de espera!', entry: rowToEntry(row!) },
+      result: {
+        success: true,
+        message: '¡Te agregamos a la lista de espera!',
+        entry: rowToEntry(row!),
+      },
       avatarUuid,
       isNew: true,
     }
