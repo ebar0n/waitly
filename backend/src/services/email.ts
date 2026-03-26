@@ -3,11 +3,7 @@ const RESEND_API_URL = 'https://api.resend.com/emails'
 const FROM = 'Waitly <onboarding@resend.dev>'
 const FIXED_RECIPIENT = 'curso.cloudflare.workers@gmail.com'
 
-async function sendEmail(
-  apiKey: SecretsStoreSecret,
-  subject: string,
-  html: string,
-): Promise<void> {
+async function sendEmail(apiKey: SecretsStoreSecret, subject: string, html: string): Promise<void> {
   const key = await apiKey.get()
   const body = { from: FROM, to: [FIXED_RECIPIENT], subject, html }
 

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { jwtAuth, requireScope } from '../middleware/auth'
+import { commentRateLimit } from '../middleware/rate-limit'
 import type { CommentBoard } from '../durable-objects/comment-board'
 
 export const commentsRouter = new Hono<{ Bindings: Env }>()
@@ -28,8 +29,10 @@ commentsRouter.get('/comments/ws', async (c) => {
   return stub.fetch(c.req.raw)
 })
 
+const COMMENT_LIMIT = 3
+
 // POST /comments — requires JWT with scope 'comment'
-commentsRouter.post('/comments', jwtAuth, requireScope('comment'), async (c) => {
+commentsRouter.post('/comments', jwtAuth, requireScope('comment'), commentRateLimit, async (c) => {
   const payload = c.get('jwtPayload') as { email: string }
   const { text } = await c.req.json<{ text: string }>()
 
@@ -61,7 +64,9 @@ commentsRouter.post('/comments', jwtAuth, requireScope('comment'), async (c) => 
       .run(),
   )
 
-  return c.json(comment, 201)
+  return c.json(comment, 201, {
+    'X-RateLimit-Limit': String(COMMENT_LIMIT),
+  })
 })
 
 // POST /comments/:id/vote — requires JWT with scope 'comment'

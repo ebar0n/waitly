@@ -53,6 +53,12 @@ npm run cf-typegen   # react-router typegen + wrangler types
 - `src/routes/comments.ts` — `POST /comments` updates `last_comment_at` in D1 via `ctx.waitUntil()` after posting to the DO, so the workflow can detect activity.
 - `src/routes/comments.ts` — comment board router. Public: `GET /comments?course=X` (list) and `GET /comments/ws?course=X` (WebSocket upgrade), both proxied to the DO via `stub.fetch()`. Protected (JWT `comment`): `POST /comments?course=X` (add comment via `stub.addComment()` RPC) and `POST /comments/:id/vote?course=X` (toggle vote via `stub.castVote()` RPC). Course param is validated (`/^[a-z0-9_-]{1,32}$/i`), defaults to `'course-2026'`.
 
+**Rate limiting** (`src/middleware/rate-limit.ts`): dos middlewares exportados:
+- `ipRateLimit` — Nivel 1 por IP (`CF-Connecting-IP`). Binding `IP_RATE_LIMITER` (20 req/60s). Aplicado en `src/index.ts` sobre `/waitlist`, `/comments` y `/comments/:id/vote`.
+- `commentRateLimit` — Nivel 2 por estudiante (key = email del JWT). Binding `COMMENT_RATE_LIMITER` (3/86400s). Aplicado en `POST /comments` tras `jwtAuth`. Ambos bindings se declaran en `wrangler.jsonc` → `rate_limiting`; los tipos se definen en `src/types/rate-limit.d.ts` porque wrangler 4.77 no los genera.
+
+`POST /comments` añade headers `X-RateLimit-Limit: 3` y `X-RateLimit-Remaining: <n>` (calculado desde D1 con `COUNT(*) WHERE email = ? AND created_at > <hace 24h>`).
+
 **Auth middleware** (`src/middleware/auth.ts`):
 - `jwtAuth` — wraps `hono/jwt`, catches `HTTPException` so it returns a response instead of throwing
 - `requireScope(scope)` — checks `jwtPayload.scope`; `read:all` satisfies any required scope
@@ -90,7 +96,7 @@ npm run cf-typegen   # react-router typegen + wrangler types
 **SSR worker** (`worker/app.ts`): receives `Request`, passes `{ env, ctx, cf: request.cf }` as `context.cloudflare` to React Router loaders.
 
 **Routes** (`app/routes.ts`):
-- `routes/home.tsx` — waitlist signup form + comment board. On successful registration, saves `commentToken` from the response to `localStorage` and immediately activates the comment composer (no page reload needed). Comment board: fetches initial list from `GET /comments?course=X`, opens a WebSocket to `ws[s]://.../comments/ws?course=X` for real-time updates, posts via `POST /comments`, votes via `POST /comments/:id/vote`. Course is read from `?course=` query param (defaults to `'course-2026'`) and can be changed live via an editable input — each value resolves to a distinct DO instance via `idFromName`. `VITE_API_URL` drives both the REST calls and the WebSocket URL (`replace(/^http/, 'ws')`).
+- `routes/home.tsx` — waitlist signup form + comment board. On successful registration, saves `commentToken` from the response to `localStorage` and immediately activates the comment composer (no page reload needed). Comment board: fetches initial list from `GET /comments?course=X`, opens a WebSocket to `ws[s]://.../comments/ws?course=X` for real-time updates, posts via `POST /comments`, votes via `POST /comments/:id/vote`. Course is read from `?course=` query param (defaults to `'course-2026'`) and can be changed live via an editable input — each value resolves to a distinct DO instance via `idFromName`. `VITE_API_URL` drives both the REST calls and the WebSocket URL (`replace(/^http/, 'ws')`). Includes a Cloudflare Turnstile widget (loaded via CDN script, no npm package) controlled by `VITE_TURNSTILE_SITE_KEY`; if the var is absent the widget is skipped. The submit button is disabled until Turnstile resolves. Token is sent as `cf-turnstile-response` in the `FormData`.
 - `routes/stats.tsx` — reads `context.cloudflare.cf` in the loader for geolocation data (SSR only, no client state)
 - `routes/landing.tsx` — SSR A/B testing landing. `loader` reads `ab:config` from KV (`AB_CONFIG` binding, `cacheTtl: 60`), assigns variant via cookie (`ab_variant`). `action` saves `variant:<email>` to KV and forwards `multipart/form-data` to backend via service binding (`env.BACKEND`) or direct fetch when `VITE_API_URL` is defined.
 
@@ -98,7 +104,9 @@ npm run cf-typegen   # react-router typegen + wrangler types
 
 **Service binding** (`wrangler.jsonc` → `services`): binding `BACKEND` pointing to Worker `waitly-api`. Used in SSR actions to call the backend Worker-to-Worker without going through the public internet. Detection pattern: `import.meta.env.VITE_API_URL` defined → local dev with `fetch`; absent → production with `env.BACKEND.fetch()`.
 
-**`AppLoadContext`** is augmented in `app/env.d.ts` (included in `tsconfig.app.json`) so loaders see `context.cloudflare` typed. `worker-configuration.d.ts` is also included in `tsconfig.app.json` to provide `Env` and `ExecutionContext`.
+**`AppLoadContext`** is augmented in `app/env.d.ts` (included in `tsconfig.app.json`) so loaders see `context.cloudflare` typed. `worker-configuration.d.ts` is also included in `tsconfig.app.json` to provide `Env` and `ExecutionContext`. `env.d.ts` also declares `window.turnstile` (inside `declare global`) for the Turnstile widget API.
+
+**`vite.config.ts`** reads `.dev.vars` in `development` mode and injects any `VITE_` prefixed variable via Vite's `define` option. This means `VITE_API_URL` and `VITE_TURNSTILE_SITE_KEY` only need to be set in `.dev.vars` — no separate `.env.local` required. In production, these vars must be available in the build environment (CI/CD) as standard env vars before running `vite build`.
 
 **Three tsconfigs** in the frontend:
 - `tsconfig.app.json` — app/ and src/ (React, DOM types, includes `worker-configuration.d.ts` and `.react-router/types/**/*`)
@@ -123,3 +131,5 @@ npm run cf-typegen   # react-router typegen + wrangler types
 - `CommentBoard` must be re-exported from `src/index.ts` (the Worker's `main` entry) for Wrangler to register the DO class. Forgetting this export causes a runtime error at DO instantiation.
 - WebSocket proxy to DO: pass `c.req.raw` directly to `stub.fetch()`. The DO detects the upgrade via the `Upgrade: websocket` header and returns a `101` response with the client WebSocket — the Worker returns it as-is.
 - `commentToken` in `home.tsx` must be `useState` with a setter (not a plain `const`) so that registering for the first time activates the comment composer immediately without a page reload.
+- `VITE_` vars in the frontend come from `.dev.vars` in dev (via `vite.config.ts` `define`) — NOT from a separate `.env.local`. Do not create `.env.local` for frontend vars; keep everything in `.dev.vars`.
+- Turnstile token (`cf-turnstile-response`) is appended to `FormData` client-side and verified server-side via `https://challenges.cloudflare.com/turnstile/v0/siteverify`. If `TURNSTILE_SECRET_KEY` is absent in the backend env, verification is skipped (backward-compatible). Use Cloudflare test keys in `.dev.vars` during development.

@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import { authRouter } from './routes/auth'
 import { publicWaitlistRouter, protectedWaitlistRouter } from './routes/waitlist'
 import { commentsRouter } from './routes/comments'
+import { ipRateLimit } from './middleware/rate-limit'
 export { CommentBoard } from './durable-objects/comment-board'
 export { OnboardingWorkflow } from './workflows/onboarding'
 
@@ -18,6 +19,11 @@ app.use(
     allowHeaders: ['Content-Type', 'Authorization'],
   }),
 )
+
+// Rate limiting de infraestructura — cubre todos los endpoints públicos escribibles
+app.use('/waitlist', ipRateLimit)
+app.use('/comments', ipRateLimit)
+app.use('/comments/:id/vote', ipRateLimit)
 
 // --- Rutas ---
 app.route('/', authRouter)
