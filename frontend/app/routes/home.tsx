@@ -36,9 +36,9 @@ function AvatarIcon() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <circle cx="18" cy="18" r="18" fill="rgba(124,106,247,0.12)" />
-      <circle cx="18" cy="14" r="6" fill="rgba(124,106,247,0.4)" />
-      <ellipse cx="18" cy="30" rx="10" ry="7" fill="rgba(124,106,247,0.4)" />
+      <circle cx="18" cy="18" r="18" fill="rgba(0,237,142,0.12)" />
+      <circle cx="18" cy="14" r="6" fill="rgba(0,237,142,0.4)" />
+      <ellipse cx="18" cy="30" rx="10" ry="7" fill="rgba(0,237,142,0.4)" />
     </svg>
   )
 }
@@ -478,8 +478,8 @@ export default function Home() {
               gap: '0.75rem',
               padding: '0.75rem 1rem',
               borderRadius: '10px',
-              background: 'rgba(124,106,247,0.06)',
-              border: '1px solid rgba(124,106,247,0.15)',
+              background: 'rgba(0,237,142,0.06)',
+              border: '1px solid rgba(0,237,142,0.15)',
             }}
           >
             <span style={{ fontSize: '1.1rem' }}>💬</span>
@@ -583,8 +583,8 @@ export default function Home() {
                       flexDirection: 'column',
                       alignItems: 'center',
                       gap: '0.1rem',
-                      background: voted ? 'rgba(124,106,247,0.15)' : 'transparent',
-                      border: `1px solid ${voted ? 'rgba(124,106,247,0.4)' : 'var(--border)'}`,
+                      background: voted ? 'rgba(0,237,142,0.15)' : 'transparent',
+                      border: `1px solid ${voted ? 'rgba(0,237,142,0.4)' : 'var(--border)'}`,
                       borderRadius: '8px',
                       padding: '0.35rem 0.55rem',
                       cursor: commentToken ? 'pointer' : 'default',

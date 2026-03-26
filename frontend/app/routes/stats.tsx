@@ -41,7 +41,7 @@ export default function Stats({ loaderData }: Route.ComponentProps) {
         justifyContent: 'center',
         padding: '2rem 1rem',
         background:
-          'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 106, 247, 0.15), transparent), var(--bg)',
+          'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 237, 142, 0.15), transparent), var(--bg)',
       }}
     >
       <div

@@ -5,7 +5,7 @@
   justify-content: center;
   padding: 2rem 1rem;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 106, 247, 0.15), transparent),
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 237, 142, 0.15), transparent),
     var(--bg);
 }
 
@@ -26,8 +26,8 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
-  background: rgba(124, 106, 247, 0.12);
-  border: 1px solid rgba(124, 106, 247, 0.25);
+  background: rgba(0, 237, 142, 0.12);
+  border: 1px solid rgba(0, 237, 142, 0.25);
   border-radius: 999px;
   padding: 0.3rem 0.9rem;
 }
@@ -100,7 +100,7 @@
 .button {
   flex-shrink: 0;
   background: var(--accent);
-  color: #fff;
+  color: #000;
   border: none;
   border-radius: 8px;
   padding: 0.6rem 1.25rem;
