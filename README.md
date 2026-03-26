@@ -23,7 +23,7 @@ waitly/
 │   ├── worker/
 │   │   └── app.ts                  # Worker SSR — pasa request.cf al loader
 │   ├── react-router.config.ts
-│   ├── vite.config.ts
+│   ├── vite.config.ts              # Lee .dev.vars en dev e inyecta vars VITE_ via define
 │   ├── wrangler.jsonc              # name: waitly-frontend
 │   ├── .dev.vars.example
 │   └── tsconfig.app/node/worker.json
@@ -33,7 +33,10 @@ waitly/
     │   ├── durable-objects/
     │   │   └── comment-board.ts    # DO CommentBoard — SQLite, RPC, Hibernation WS
     │   ├── middleware/
-    │   │   └── auth.ts             # JWT middleware + requireScope
+    │   │   ├── auth.ts             # JWT middleware + requireScope
+    │   │   └── rate-limit.ts       # ipRateLimit (por IP) + commentRateLimit (por email JWT)
+    │   ├── types/
+    │   │   └── rate-limit.d.ts     # Extiende Env con IP_RATE_LIMITER y COMMENT_RATE_LIMITER
     │   ├── routes/
     │   │   ├── auth.ts             # POST /auth/token
     │   │   ├── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
@@ -112,18 +115,22 @@ npm run dev:backend
 
 ### Backend (`backend/.dev.vars`)
 
-| Variable         | Descripción                                         | Ejemplo local           |
-|------------------|-----------------------------------------------------|-------------------------|
-| `CORS_ORIGIN`    | Origen permitido para CORS                          | `*`                     |
-| `JWT_SECRET`     | Clave para firmar y verificar JWTs                  | `dev-jwt-secret`        |
-| `ADMIN_SECRET`   | Clave para obtener tokens desde `/auth/token`       | `dev-admin-secret`      |
-| `RESEND_API_KEY` | API key de Resend (dev local — en prod usa Secrets Store) | `re_...`          |
+| Variable                | Descripción                                              | Ejemplo local                              |
+|-------------------------|----------------------------------------------------------|--------------------------------------------|
+| `CORS_ORIGIN`           | Origen permitido para CORS                               | `*`                                        |
+| `JWT_SECRET`            | Clave para firmar y verificar JWTs                       | `dev-jwt-secret`                           |
+| `ADMIN_SECRET`          | Clave para obtener tokens desde `/auth/token`            | `dev-admin-secret`                         |
+| `RESEND_API_KEY`        | API key de Resend (dev local — en prod usa Secrets Store)| `re_...`                                   |
+| `TURNSTILE_SECRET_KEY`  | Clave secreta de Cloudflare Turnstile para verificación  | `1x0000000000000000000000000000000AA` (test)|
 
 ### Frontend (`frontend/.dev.vars`)
 
-| Variable       | Descripción                        | Ejemplo local               |
-|----------------|------------------------------------|-----------------------------|
-| `VITE_API_URL` | URL del backend                    | `http://localhost:8787`     |
+> Las variables `VITE_` son inlineadas por Vite en build time. En desarrollo, `vite.config.ts` las lee automáticamente desde `.dev.vars` — no hace falta un `.env.local` separado.
+
+| Variable                  | Descripción                                              | Ejemplo local                  |
+|---------------------------|----------------------------------------------------------|--------------------------------|
+| `VITE_API_URL`            | URL del backend                                          | `http://localhost:8787`        |
+| `VITE_TURNSTILE_SITE_KEY` | Site key pública de Cloudflare Turnstile para el widget  | `1x00000000000000000000AA` (test)|
 
 ---
 
@@ -144,6 +151,9 @@ npx wrangler secret put JWT_SECRET
 
 npx wrangler secret put ADMIN_SECRET
 # Introduce: un valor seguro generado con openssl rand -base64 32
+
+npx wrangler secret put TURNSTILE_SECRET_KEY
+# Introduce: la clave secreta del sitio en dashboard.cloudflare.com → Turnstile
 ```
 
 `RESEND_API_KEY` se gestiona en el **Cloudflare Secrets Store** (compartido entre Workers) y ya está configurado. Para actualizarlo:
@@ -298,6 +308,39 @@ El backend usa un Durable Object por cada valor de `?course=X`. Cada instancia m
 Cambiar el parámetro `?course=` en la URL es suficiente para suscribirse a un tablero completamente distinto — sin tocar código.
 
 **JWT `comment`**: al registrarse en `POST /waitlist`, la respuesta incluye `commentToken` con `{ email, scope: 'comment', exp: +30 días }`. El frontend lo guarda en `localStorage` y lo usa en las peticiones protegidas. El backend extrae el `email` del token para asociar el comentario al usuario sin que el cliente envíe datos extra.
+
+### Rate Limiting — `IP_RATE_LIMITER` y `COMMENT_RATE_LIMITER`
+
+El backend aplica dos niveles de rate limiting usando la Workers Rate Limiting API:
+
+**Nivel 1 — Infraestructura (por IP)**: middleware `ipRateLimit` aplicado globalmente en `POST /waitlist`, `POST /comments` y `POST /comments/:id/vote`. Límite: 20 req / 60 s. Retorna `429` si se supera.
+
+**Nivel 2 — Negocio (por estudiante)**: middleware `commentRateLimit` aplicado en `POST /comments` (después de `jwtAuth`). Límite: 3 comentarios / 24 h. La key del rate limiter es el **email extraído del JWT** — nunca del body, evitando spoofing. Retorna `429` con `{ error: "Límite de comentarios alcanzado" }`.
+
+`POST /comments` incluye headers de rate limit:
+```
+X-RateLimit-Limit: 3
+X-RateLimit-Remaining: <n>   # calculado desde D1: COUNT(*) WHERE email = ? AND created_at > <hace 24h>
+Retry-After: <segundos>      # solo en 429
+```
+
+Los contadores son distribuidos globalmente — sin servidor central, sin estado local (ventana fija, no deslizante).
+
+### Cloudflare Turnstile
+
+Protege `POST /waitlist` contra bots con un widget de verificación invisible/interactivo.
+
+**Frontend** (`home.tsx`): carga el script de Turnstile desde CDN (`challenges.cloudflare.com/turnstile/v0/api.js`) y renderiza el widget vía `window.turnstile.render()`. El botón de registro queda deshabilitado hasta que el widget resuelve el desafío. El token se envía como `cf-turnstile-response` en el `FormData`.
+
+**Backend** (`src/routes/waitlist.ts`): llama a `https://challenges.cloudflare.com/turnstile/v0/siteverify` con el token y `TURNSTILE_SECRET_KEY`. Si la verificación falla, devuelve `400`. Si `TURNSTILE_SECRET_KEY` no está en el entorno, la verificación se omite (útil en entornos sin Turnstile configurado).
+
+**`vite.config.ts`**: lee `.dev.vars` en modo `development` e inyecta las variables `VITE_` via `define`. Así `VITE_TURNSTILE_SITE_KEY` (y `VITE_API_URL`) solo necesitan estar en `.dev.vars` — no hace falta `.env.local`.
+
+Claves de prueba de Cloudflare (siempre válidas):
+- Site key: `1x00000000000000000000AA`
+- Secret key: `1x0000000000000000000000000000000AA`
+
+Para crear un sitio real: [dashboard.cloudflare.com](https://dash.cloudflare.com/) → Turnstile → Add site.
 
 ### Service Binding — `BACKEND`
 

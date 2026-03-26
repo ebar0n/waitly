@@ -17,10 +17,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { env } = context.cloudflare
 
   const raw = await env.AB_CONFIG.get('ab:config', { cacheTtl: 60 })
-  const config: AbConfig = raw ? JSON.parse(raw) : {
-    variant_a: { badge: 'Acceso Anticipado', headline: 'Domina Cloudflare Workers desde cero', cta: 'Reservar mi lugar' },
-    variant_b: { badge: 'Cupos Limitados', headline: 'Construye apps serverless de producción hoy', cta: 'Quiero aprender ahora' },
-  }
+  const config: AbConfig = raw
+    ? JSON.parse(raw)
+    : {
+        variant_a: {
+          badge: 'Acceso Anticipado',
+          headline: 'Domina Cloudflare Workers desde cero',
+          cta: 'Reservar mi lugar',
+        },
+        variant_b: {
+          badge: 'Cupos Limitados',
+          headline: 'Construye apps serverless de producción hoy',
+          cta: 'Quiero aprender ahora',
+        },
+      }
 
   const cookieHeader = request.headers.get('Cookie') ?? ''
   const existingVariant = cookieHeader
@@ -30,12 +40,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     ?.split('=')[1] as 'variant_a' | 'variant_b' | undefined
 
   const isNew = !existingVariant
-  const variant: 'variant_a' | 'variant_b' = existingVariant ?? (Math.random() < 0.5 ? 'variant_a' : 'variant_b')
+  const variant: 'variant_a' | 'variant_b' =
+    existingVariant ?? (Math.random() < 0.5 ? 'variant_a' : 'variant_b')
 
   return data(
     { config, variant, setVariantCookie: isNew },
     isNew
-      ? { headers: { 'Set-Cookie': `ab_variant=${variant}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000` } }
+      ? {
+          headers: {
+            'Set-Cookie': `ab_variant=${variant}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+          },
+        }
       : undefined,
   )
 }
@@ -54,17 +69,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   try {
     const apiUrl = env.VITE_API_URL
-    console.info({message: 'Connecting to server...', apiUrl, email})
+    console.info({ message: 'Connecting to server...', apiUrl, email })
     const res = apiUrl
       ? await fetch(`${apiUrl}/waitlist`, { method: 'POST', body: formData })
-      : await env.BACKEND.fetch(new Request('https://waitly-api.workers.dev/waitlist', { method: 'POST', body: formData }))
+      : await env.BACKEND.fetch(
+          new Request('https://waitly-api.workers.dev/waitlist', {
+            method: 'POST',
+            body: formData,
+          }),
+        )
     const result = (await res.json()) as { message?: string; error?: string }
     if (!res.ok) {
       return { ok: false, message: result.error ?? 'Algo salió mal.' }
     }
     return { ok: true, message: result.message ?? '¡Ya estás en la lista!' }
   } catch (error) {
-    console.error({message: 'No se pudo conectar al servidor.', error: JSON.stringify(error, null, 2)})
+    console.error({
+      message: 'No se pudo conectar al servidor.',
+      error: JSON.stringify(error, null, 2),
+    })
     return { ok: false, message: 'No se pudo conectar al servidor.' }
   }
 }

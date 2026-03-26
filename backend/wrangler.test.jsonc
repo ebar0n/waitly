@@ -27,5 +27,12 @@
       "binding": "UPLOADS_BUCKET",
       "bucket_name": "waitly-uploads"
     }
+  ],
+  "workflows": [
+    {
+      "name": "onboarding-workflow",
+      "binding": "ONBOARDING_WORKFLOW",
+      "class_name": "OnboardingWorkflow"
+    }
   ]
 }

@@ -2,3 +2,8 @@
 
 # URL del API backend — usa localhost en desarrollo, la URL del Worker en producción en build time
 VITE_API_URL=http://localhost:8787
+
+# Cloudflare Turnstile — site key pública para el widget en el frontend
+# Claves de prueba (Cloudflare): siempre válidas en dev
+# Docs: https://developers.cloudflare.com/turnstile/reference/testing/
+VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA

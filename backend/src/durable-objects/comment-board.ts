@@ -85,11 +85,9 @@ export class CommentBoard extends DurableObject<Env> {
 
   async castVote(commentId: string, email: string): Promise<number> {
     const existing = this.ctx.storage.sql
-      .exec<{ comment_id: string }>(
-        'SELECT comment_id FROM votes WHERE comment_id = ? AND email = ?',
-        commentId,
-        email,
-      )
+      .exec<{
+        comment_id: string
+      }>('SELECT comment_id FROM votes WHERE comment_id = ? AND email = ?', commentId, email)
       .toArray()
 
     if (existing.length > 0) {

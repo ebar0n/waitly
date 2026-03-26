@@ -1,8 +1,15 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env } from 'cloudflare:workers'
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import worker from '../index'
+
+// Los bindings RateLimit (IP_RATE_LIMITER, COMMENT_RATE_LIMITER) no existen en
+// miniflare — se mockea el módulo completo para que los middlewares sean no-ops.
+vi.mock('../middleware/rate-limit', () => ({
+  ipRateLimit: vi.fn((_c: unknown, next: () => Promise<void>) => next()),
+  commentRateLimit: vi.fn((_c: unknown, next: () => Promise<void>) => next()),
+}))
 
 const BASE = 'http://localhost'
 
