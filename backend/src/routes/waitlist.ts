@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
+import { sign } from 'hono/jwt'
 import { jwtAuth, requireScope } from '../middleware/auth'
 import { WaitlistService } from '../services/waitlist'
 import { EmailService } from '../services/email'
@@ -17,6 +18,7 @@ const WaitlistResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   entry: WaitlistEntrySchema,
+  commentToken: z.string(),
 })
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -89,7 +91,13 @@ publicWaitlistRouter.openapi(postRoute, async (c) => {
     )
   }
 
-  return c.json(result, isNew ? (201 as const) : (200 as const))
+  const commentToken = await sign(
+    { email, scope: 'comment', exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 },
+    c.env.JWT_SECRET,
+    'HS256',
+  )
+
+  return c.json({ ...result, commentToken }, isNew ? (201 as const) : (200 as const))
 })
 
 // --- Rutas protegidas (requieren JWT) ---

@@ -2,11 +2,12 @@ import { jwt } from 'hono/jwt'
 import { HTTPException } from 'hono/http-exception'
 import type { Context, Next } from 'hono'
 
-export type Scope = 'read:self' | 'read:all'
+export type Scope = 'read:self' | 'read:all' | 'comment'
 
 export type JwtPayload = {
+  email?: string
   scope: Scope
-  iat: number
+  iat?: number
   exp: number
 }
 
