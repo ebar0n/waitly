@@ -54,6 +54,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   try {
     const apiUrl = import.meta.env.VITE_API_URL
+    console.info({message: 'Connecting to server...', apiUrl, email})
     const res = apiUrl
       ? await fetch(`${apiUrl}/waitlist`, { method: 'POST', body: formData })
       : await env.BACKEND.fetch(new Request('http://waitly-api/waitlist', { method: 'POST', body: formData }))
@@ -63,7 +64,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     }
     return { ok: true, message: result.message ?? '¡Ya estás en la lista!' }
   } catch (error) {
-    console.error({message: 'No se pudo conectar al servidor.', error})
+    console.error({message: 'No se pudo conectar al servidor.', error: JSON.stringify(error, null, 2)})
     return { ok: false, message: 'No se pudo conectar al servidor.' }
   }
 }
