@@ -38,9 +38,11 @@ waitly/
     │   │   ├── auth.ts             # POST /auth/token
     │   │   ├── waitlist.ts         # POST /waitlist, GET /waitlist, GET /waitlist/:email
     │   │   └── comments.ts         # GET|POST /comments, POST /comments/:id/vote, WS
+    │   ├── workflows/
+    │   │   └── onboarding.ts       # OnboardingWorkflow — bienvenida + 3 follow-ups
     │   └── services/
     │       ├── waitlist.ts         # Capa de datos — D1 (INSERT / SELECT)
-    │       └── email.ts            # Envío de email de bienvenida via Resend
+    │       └── email.ts            # sendWelcome + sendFollowUp via Resend
     ├── tsconfig.json
     ├── wrangler.jsonc              # name: waitly-api
     └── .dev.vars.example
@@ -251,6 +253,31 @@ npx wrangler d1 migrations apply waitly-db --remote
 - El UUID se genera una vez por email y persiste en D1 (`avatar_uuid`)
 - Re-registrarse con un nuevo avatar sobreescribe el mismo objeto en R2
 - Tipos permitidos: `image/jpeg`, `image/png`, `image/webp` — máximo 5MB
+
+### Workflows — Onboarding (`ONBOARDING_WORKFLOW`)
+
+Al registrarse un nuevo estudiante (`POST /waitlist`), se lanza una instancia del workflow `OnboardingWorkflow` usando el email como instance ID (previene duplicados).
+
+Ciclo de onboarding:
+```
+send-welcome      → email de bienvenida
+wait-30m
+check-activity-1  → consulta last_comment_at en D1; si tiene valor → finaliza
+send-followup-1   → email de seguimiento
+wait-24h
+check-activity-2  → consulta last_comment_at en D1; si tiene valor → finaliza
+send-followup-2   → email de seguimiento
+wait-7d
+check-activity-3  → consulta last_comment_at en D1; si tiene valor → finaliza
+send-followup-3   → email final
+```
+
+`last_comment_at` se actualiza en D1 cuando el estudiante publica su primer comentario (`POST /comments`) via `ctx.waitUntil()`. La migración que añade esta columna es `0003_add_last_comment.sql` — aplicar manualmente:
+
+```bash
+cd backend
+npx wrangler d1 migrations apply waitly-db --remote
+```
 
 ### Durable Objects — Tablero de comentarios (`COMMENT_BOARD`)
 

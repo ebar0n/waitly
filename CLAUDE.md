@@ -45,11 +45,12 @@ npm run cf-typegen   # react-router typegen + wrangler types
 
 ## Backend architecture
 
-**Entry**: `src/index.ts` — `OpenAPIHono` app, mounts routers, registers CORS, Swagger UI at `/swagger`, OpenAPI doc at `/doc`, redirects `/` → `/swagger`. Also re-exports `CommentBoard` so Wrangler can register the Durable Object class.
+**Entry**: `src/index.ts` — `OpenAPIHono` app, mounts routers, registers CORS, Swagger UI at `/swagger`, OpenAPI doc at `/doc`, redirects `/` → `/swagger`. Also re-exports `CommentBoard` and `OnboardingWorkflow` so Wrangler can register both classes.
 
 **Routers**:
 - `src/routes/auth.ts` — `POST /auth/token`: validates `ADMIN_SECRET`, returns signed JWT (24h, HS256)
-- `src/routes/waitlist.ts` — public router (`POST /waitlist`) + protected router (`GET /waitlist`, `GET /waitlist/{email}`). `POST /waitlist` also signs and returns a `commentToken` (scope `comment`, 30-day exp) so the frontend can post comments without storing extra user data.
+- `src/routes/waitlist.ts` — public router (`POST /waitlist`) + protected router (`GET /waitlist`, `GET /waitlist/{email}`). `POST /waitlist` also signs and returns a `commentToken` (scope `comment`, 30-day exp) so the frontend can post comments without storing extra user data. On new registrations, launches `ONBOARDING_WORKFLOW` with `{ id: email, params: { email } }` — using email as instance ID prevents duplicate workflows.
+- `src/routes/comments.ts` — `POST /comments` updates `last_comment_at` in D1 via `ctx.waitUntil()` after posting to the DO, so the workflow can detect activity.
 - `src/routes/comments.ts` — comment board router. Public: `GET /comments?course=X` (list) and `GET /comments/ws?course=X` (WebSocket upgrade), both proxied to the DO via `stub.fetch()`. Protected (JWT `comment`): `POST /comments?course=X` (add comment via `stub.addComment()` RPC) and `POST /comments/:id/vote?course=X` (toggle vote via `stub.castVote()` RPC). Course param is validated (`/^[a-z0-9_-]{1,32}$/i`), defaults to `'course-2026'`.
 
 **Auth middleware** (`src/middleware/auth.ts`):
@@ -60,9 +61,11 @@ npm run cf-typegen   # react-router typegen + wrangler types
 
 **Service layer**:
 - `src/services/waitlist.ts` — persists data in D1. Methods: `addEmail(db, email, country)`, `upsertEmail(db, email, country)` (returns `{ result, avatarUuid, isNew }`), `findAll(db)`, `findByEmail(db, email)`. Migrations live in `backend/migrations/`.
-- `src/services/email.ts` — sends welcome email via Resend after registration. Called inside `c.executionCtx.waitUntil()` in `POST /waitlist` so it doesn't block the response. Hardcoded recipient until a domain is verified in Resend.
+- `src/services/email.ts` — `sendWelcome(email, apiKey)` and `sendFollowUp(email, apiKey)` via Resend. Both called from the workflow. Hardcoded recipient until a domain is verified in Resend.
 
-**D1 database** (`wrangler.jsonc` → `d1_databases`): binding `DB`, database `waitly-db` (ID: `69ed849a-5347-4dec-abb3-5ccb9e15b886`). Run migrations with `wrangler d1 migrations apply waitly-db --remote`. Local dev uses a local SQLite file automatically. Migration `0002_add_avatar.sql` adds `avatar_uuid TEXT` column — apply manually.
+**Workflow** (`wrangler.jsonc` → `workflows`): binding `ONBOARDING_WORKFLOW`, class `OnboardingWorkflow` (`src/workflows/onboarding.ts`). Launched from `POST /waitlist` for new registrations using `email` as instance ID. Steps: `send-welcome` → `wait-30m` → `check-activity-1` (D1) → `send-followup-1` → `wait-24h` → `check-activity-2` (D1) → `send-followup-2` → `wait-7d` → `check-activity-3` (D1) → `send-followup-3`. Each check reads `last_comment_at` from D1 and returns early if set. Each `step.do()` is idempotent and retryable; `step.sleep()` enables multi-day pauses impossible with `waitUntil`.
+
+**D1 database** (`wrangler.jsonc` → `d1_databases`): binding `DB`, database `waitly-db` (ID: `69ed849a-5347-4dec-abb3-5ccb9e15b886`). Run migrations with `wrangler d1 migrations apply waitly-db --remote`. Local dev uses a local SQLite file automatically. Migration `0002_add_avatar.sql` adds `avatar_uuid TEXT` column — apply manually. Migration `0003_add_last_comment.sql` adds `last_comment_at TEXT` column (updated by `POST /comments` via `waitUntil`) — apply manually.
 
 **Durable Object** (`wrangler.jsonc` → `durable_objects` + `migrations`): binding `COMMENT_BOARD`, class `CommentBoard` (`src/durable-objects/comment-board.ts`). Uses `new_sqlite_classes` migration tag `v1`.
 - `idFromName(course)` routes each course slug to its own independent DO instance — changing `?course=X` subscribes to a different board with zero code changes.

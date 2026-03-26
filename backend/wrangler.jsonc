@@ -52,5 +52,12 @@
       "tag": "v1",
       "new_sqlite_classes": ["CommentBoard"]
     }
+  ],
+  "workflows": [
+    {
+      "name": "onboarding-workflow",
+      "binding": "ONBOARDING_WORKFLOW",
+      "class_name": "OnboardingWorkflow"
+    }
   ]
 }
